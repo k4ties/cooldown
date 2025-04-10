@@ -3,16 +3,16 @@ package cooldown
 import (
 	"context"
 	"github.com/df-mc/dragonfly/server/event"
-	"go.uber.org/atomic"
+	"sync/atomic"
 	"time"
 )
 
 // CoolDown represents a cooldown with per-tick handler.
 type CoolDown struct {
-	exp atomic.Time
+	exp atomic.Pointer[time.Time]
 
-	cancel,
-	handler atomic.Value
+	cancel  atomic.Pointer[context.CancelCauseFunc]
+	handler atomic.Pointer[Handler]
 }
 
 // New returns new blank cooldown.
@@ -23,13 +23,13 @@ func New(h Handler) *CoolDown {
 
 	cd := &CoolDown{}
 	cd.Handle(h)
-	cd.cancel.Store(zeroCancel)
+	cd.cancel.Store(&zeroCancel)
 
 	return cd
 }
 
 // zeroCancel ...
-var zeroCancel context.CancelFunc
+var zeroCancel context.CancelCauseFunc
 
 // Set sets the cooldown duration to the specified one. If cooldown is active, it will be stopped.
 func (c *CoolDown) Set(dur time.Duration) {
@@ -37,13 +37,13 @@ func (c *CoolDown) Set(dur time.Duration) {
 		return
 	}
 	if c.Active() {
-		c.Reset()
+		c.reset(StopCauseRenew)
 	}
 
 	c.startTick(dur, context.Background())
 
 	exp := time.Now().Add(dur)
-	c.exp.Store(exp)
+	c.exp.Store(&exp)
 }
 
 // reHandleSet handles renew if cooldown is currently active, otherwise it will handle start. It
@@ -69,22 +69,30 @@ func (c *CoolDown) reHandleSet() bool {
 // Remaining returns time until expiration of the CoolDown.
 func (c *CoolDown) Remaining() time.Duration {
 	exp := c.exp.Load()
-	return time.Until(exp)
+	return time.Until(*exp)
 }
 
 // Reset resets current cooldown. If currently CoolDown ticker is active, it will be
 // stopped immediately.
 func (c *CoolDown) Reset() {
+	c.reset(StopCauseCancelled)
+}
+
+func (c *CoolDown) reset(cause StopCause) {
 	if cancel := c.getCancel(); cancel != nil {
-		cancel()
-		c.cancel.Store((context.CancelFunc)(nil))
+		cancel(cause)
+		c.cancel.Store(new(context.CancelCauseFunc))
 	}
-	c.exp.Store(time.Time{})
+	c.exp.Store(&time.Time{})
 }
 
 // Active returns true if cooldown is currently active.
 func (c *CoolDown) Active() bool {
-	return c.exp.Load().After(time.Now())
+	exp := c.exp.Load()
+	if exp == nil {
+		exp = &time.Time{}
+	}
+	return (*exp).After(time.Now())
 }
 
 // Handle sets new handler to the cooldown. If this handler is nil, handler will
@@ -93,16 +101,16 @@ func (c *CoolDown) Handle(h Handler) {
 	if h == nil {
 		h = NopHandler{}
 	}
-	c.handler.Store(h)
+	c.handler.Store(&h)
 }
 
 // Handler returns current cooldown handler.
 func (c *CoolDown) Handler() Handler {
 	val := c.handler.Load()
-	return val.(Handler)
+	return (*val).(Handler)
 }
 
 // getCancel ...
-func (c *CoolDown) getCancel() context.CancelFunc {
-	return c.cancel.Load().(context.CancelFunc)
+func (c *CoolDown) getCancel() context.CancelCauseFunc {
+	return *c.cancel.Load()
 }

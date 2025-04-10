@@ -37,4 +37,6 @@ var (
 	StopCauseExpired StopCause = errors.New("expired")
 	// StopCauseCancelled used when cooldown is cancelled.
 	StopCauseCancelled StopCause = errors.New("cancelled")
+	// StopCauseRenew used when cooldown is renewed.
+	StopCauseRenew StopCause = errors.New("renew")
 )

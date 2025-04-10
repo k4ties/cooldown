@@ -2,6 +2,7 @@ package cooldown
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -16,8 +17,8 @@ func tickDuration() time.Duration {
 
 // startTick starts the ticker task of the CoolDown.
 func (c *CoolDown) startTick(dur time.Duration, parent context.Context) {
-	ctx, cancel := context.WithCancel(parent)
-	c.cancel.Store(cancel)
+	ctx, cancel := context.WithCancelCause(parent)
+	c.cancel.Store(&cancel)
 
 	ticker := time.NewTicker(tickDuration())
 	timer := time.NewTimer(dur)
@@ -36,8 +37,16 @@ func (c *CoolDown) tick(ctx context.Context, ticker *time.Ticker, timer *time.Ti
 	var tick int64
 
 	defer func() {
+		c.cancel.Store(&zeroCancel)
+
+		if err := context.Cause(ctx); err != nil {
+			// if it's renew, it is not stop event, so we'll return from func to prevent handling stop
+			if errors.Is(err, StopCauseRenew) {
+				return
+			}
+		}
+
 		c.Handler().HandleStop(c, cause)
-		c.cancel.Store(zeroCancel)
 	}()
 
 	for {
