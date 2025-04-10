@@ -13,6 +13,8 @@ type CoolDown struct {
 
 	cancel  atomic.Pointer[context.CancelCauseFunc]
 	handler atomic.Pointer[Handler]
+
+	renew atomic.Pointer[chan struct{}]
 }
 
 // New returns new blank cooldown.
@@ -33,37 +35,20 @@ var zeroCancel context.CancelCauseFunc
 
 // Set sets the cooldown duration to the specified one. If cooldown is active, it will be stopped.
 func (c *CoolDown) Set(dur time.Duration) {
-	if !c.reHandleSet() {
+	if c.Active() && c.hasRenewChan() {
+		c.renewChan() <- struct{}{}
 		return
 	}
-	if c.Active() {
-		c.reset(StopCauseRenew)
+
+	ctx := event.C(c)
+	if c.Handler().HandleStart(ctx); ctx.Cancelled() {
+		return
 	}
 
 	c.startTick(dur, context.Background())
 
 	exp := time.Now().Add(dur)
 	c.exp.Store(&exp)
-}
-
-// reHandleSet handles renew if cooldown is currently active, otherwise it will handle start. It
-// returns false if context is cancelled and true if it's not.
-func (c *CoolDown) reHandleSet() bool {
-	ctx := event.C(c)
-	handler := c.Handler()
-
-	if c.Active() {
-		// if currently active, it is renewed event
-		if handler.HandleRenew(ctx); ctx.Cancelled() {
-			return false
-		}
-	} else {
-		// otherwise it is start event
-		if handler.HandleStart(ctx); ctx.Cancelled() {
-			return false
-		}
-	}
-	return true
 }
 
 // Remaining returns time until expiration of the CoolDown.
@@ -113,4 +98,20 @@ func (c *CoolDown) Handler() Handler {
 // getCancel ...
 func (c *CoolDown) getCancel() context.CancelCauseFunc {
 	return *c.cancel.Load()
+}
+
+func (c *CoolDown) setRenewChan(ch chan struct{}) {
+	c.renew.Store(&ch)
+}
+
+func (c *CoolDown) hasRenewChan() bool {
+	return c.renewChan() != nil
+}
+
+func (c *CoolDown) renewChan() chan<- struct{} {
+	val := c.renew.Load()
+	if val == nil {
+		return nil
+	}
+	return *val
 }
