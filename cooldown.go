@@ -35,20 +35,32 @@ var zeroCancel context.CancelCauseFunc
 
 // Set sets the cooldown duration to the specified one. If cooldown is active, it will be stopped.
 func (c *CoolDown) Set(dur time.Duration) {
-	if c.Active() && c.hasRenewChan() {
-		c.renewChan() <- struct{}{}
-		return
-	}
-
 	ctx := event.C(c)
 	if c.Handler().HandleStart(ctx); ctx.Cancelled() {
 		return
+	}
+	if c.Active() {
+		c.Reset()
 	}
 
 	c.startTick(dur, context.Background())
 
 	exp := time.Now().Add(dur)
 	c.exp.Store(&exp)
+}
+
+// Renew renews the CoolDown. If it's not currently active, it'll panic.
+func (c *CoolDown) Renew() {
+	if !c.hasRenewChan() || !c.Active() {
+		panic("unable to renew")
+	}
+
+	ctx := event.C(c)
+	if c.Handler().HandleRenew(ctx); ctx.Cancelled() {
+		return
+	}
+
+	c.renewChan() <- struct{}{}
 }
 
 // Remaining returns time until expiration of the CoolDown.
@@ -60,13 +72,20 @@ func (c *CoolDown) Remaining() time.Duration {
 // Reset resets current cooldown. If currently CoolDown ticker is active, it will be
 // stopped immediately.
 func (c *CoolDown) Reset() {
+	if !c.Active() {
+		panic("trying to reset while cooldown is not active")
+	}
 	c.reset(StopCauseCancelled)
 }
 
 func (c *CoolDown) reset(cause StopCause) {
 	if cancel := c.getCancel(); cancel != nil {
 		cancel(cause)
-		c.cancel.Store(new(context.CancelCauseFunc))
+		c.cancel.Store(&zeroCancel)
+	}
+	if renewChan := c.renewChan(); renewChan != nil {
+		close(renewChan)
+		c.renew.Store(new(chan struct{}))
 	}
 	c.exp.Store(&time.Time{})
 }
@@ -75,7 +94,7 @@ func (c *CoolDown) reset(cause StopCause) {
 func (c *CoolDown) Active() bool {
 	exp := c.exp.Load()
 	if exp == nil {
-		exp = &time.Time{}
+		return false
 	}
 	return (*exp).After(time.Now())
 }
@@ -100,14 +119,12 @@ func (c *CoolDown) getCancel() context.CancelCauseFunc {
 	return *c.cancel.Load()
 }
 
-func (c *CoolDown) setRenewChan(ch chan struct{}) {
-	c.renew.Store(&ch)
-}
-
+// hasRenewChan ...
 func (c *CoolDown) hasRenewChan() bool {
 	return c.renewChan() != nil
 }
 
+// renewChan ...
 func (c *CoolDown) renewChan() chan<- struct{} {
 	val := c.renew.Load()
 	if val == nil {

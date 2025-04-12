@@ -11,15 +11,17 @@ func main() {
 	cd.Set(time.Second * 20)
 
 	<-time.After(time.Second * 2)
-	cd.Set(time.Second * 10) // this line causing renew, must not be stop event
+	cd.Renew()
 
 	<-time.After(time.Second * 5)
-	cd.Reset()
-	cd.Reset()
+	cd.Reset() // stop cause cancelled
+	// start
+	cd.Set(time.Second)
 
 	select {
-	case <-time.After(time.Second * 6):
-		// end script
+	case <-time.After(time.Second * 2):
+		// tick 1s
+		// stop cause expired
 	}
 }
 
@@ -38,12 +40,17 @@ func (handler) HandleRenew(*cooldown.Context) {
 }
 
 func (handler) HandleTick(_ *cooldown.CoolDown, current int64) {
+	if current == 1 {
+		l("first tick second")
+		return
+	}
+
 	if current%int64(cooldown.TicksPerSecond) == 0 {
 		// second passed
-		l("tick 1s")
+		l("tick second")
 	}
 }
 
 func (handler) HandleStop(_ *cooldown.CoolDown, cause cooldown.StopCause) {
-	l("stop cause", cause)
+	l("stop cause ", cause)
 }

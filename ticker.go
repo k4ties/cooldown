@@ -2,8 +2,6 @@ package cooldown
 
 import (
 	"context"
-	"errors"
-	"github.com/df-mc/dragonfly/server/event"
 	"time"
 )
 
@@ -32,28 +30,20 @@ func (c *CoolDown) tick(ctx context.Context, ticker *time.Ticker, timer *time.Ti
 	defer func() {
 		ticker.Stop()
 		timer.Stop()
-		c.setRenewChan(nil)
 	}()
 
 	var cause StopCause
 	var tick int64
 
 	renew := make(chan struct{})
+
 	if c.hasRenewChan() {
 		panic("tried to start ticking when already ticking")
 	}
 
-	c.setRenewChan(renew)
+	c.renew.Store(&renew)
 	defer func() {
 		c.cancel.Store(&zeroCancel)
-
-		if err := context.Cause(ctx); err != nil {
-			// if it's renew, it is not stop event, so we'll return from func to prevent handling stop
-			if errors.Is(err, StopCauseRenew) {
-				return
-			}
-		}
-
 		c.Handler().HandleStop(c, cause)
 	}()
 
@@ -65,12 +55,15 @@ func (c *CoolDown) tick(ctx context.Context, ticker *time.Ticker, timer *time.Ti
 		case <-timer.C:
 			cause = StopCauseExpired
 			return
-		case <-renew:
-			ctx := event.C(c)
-			if c.Handler().HandleRenew(ctx); !ctx.Cancelled() {
-				ticker.Reset(tickDuration())
-				timer.Reset(dur)
+		case _, ok := <-renew:
+			if !ok {
+				// close
+				cause = StopCauseCancelled
+				return
 			}
+
+			ticker.Reset(tickDuration())
+			timer.Reset(dur)
 		case <-ctx.Done():
 			cause = StopCauseCancelled
 			return
