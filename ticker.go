@@ -17,16 +17,19 @@ func tickDuration() time.Duration {
 // startTick starts the ticker task of the CoolDown.
 func (c *CoolDown) startTick(dur time.Duration, parent context.Context) {
 	ctx, cancel := context.WithCancelCause(parent)
-	c.cancel.Store(&cancel)
+	c.cancel.Store(cancel)
 
 	ticker := time.NewTicker(tickDuration())
 	timer := time.NewTimer(dur)
 
-	go c.tick(ctx, ticker, timer, dur)
+	go c.tickTask(ctx, ticker, timer, dur)
 }
 
-// tick start the main ticker task of the CoolDown.
-func (c *CoolDown) tick(ctx context.Context, ticker *time.Ticker, timer *time.Timer, dur time.Duration) {
+// tickTask start the main ticker task of the CoolDown.
+func (c *CoolDown) tickTask(ctx context.Context, ticker *time.Ticker, timer *time.Timer, dur time.Duration) {
+	c.wg.Add(1)
+	defer c.wg.Done()
+
 	defer func() {
 		ticker.Stop()
 		timer.Stop()
@@ -35,17 +38,18 @@ func (c *CoolDown) tick(ctx context.Context, ticker *time.Ticker, timer *time.Ti
 	var cause StopCause
 	var tick int64
 
+	defer func() {
+		c.cancel.Store(zeroCancel)
+		c.Handler().HandleStop(c, cause)
+	}()
+
 	renew := make(chan struct{})
 
 	if c.hasRenewChan() {
 		panic("tried to start ticking when already ticking")
 	}
 
-	c.renew.Store(&renew)
-	defer func() {
-		c.cancel.Store(&zeroCancel)
-		c.Handler().HandleStop(c, cause)
-	}()
+	c.renew.Store(renew)
 
 	for {
 		select {
@@ -55,13 +59,7 @@ func (c *CoolDown) tick(ctx context.Context, ticker *time.Ticker, timer *time.Ti
 		case <-timer.C:
 			cause = StopCauseExpired
 			return
-		case _, ok := <-renew:
-			if !ok {
-				// close
-				cause = StopCauseCancelled
-				return
-			}
-
+		case <-(<-chan struct{})(renew): // only receive
 			ticker.Reset(tickDuration())
 			timer.Reset(dur)
 		case <-ctx.Done():

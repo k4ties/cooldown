@@ -1,22 +1,22 @@
 package main
 
 import (
+	"fmt"
 	"github.com/k4ties/cooldown"
-	"log"
 	"time"
 )
 
 func main() {
 	cd := cooldown.New(&handler{})
-	cd.Set(time.Second * 20)
+	cd.Start(time.Second * 20)
 
 	<-time.After(time.Second * 2)
 	cd.Renew()
 
 	<-time.After(time.Second * 5)
-	cd.Reset() // stop cause cancelled
+	cd.Stop() // stop cause cancelled
 	// start
-	cd.Set(time.Second)
+	cd.Start(time.Second)
 
 	select {
 	case <-time.After(time.Second * 2):
@@ -26,7 +26,7 @@ func main() {
 }
 
 func l(a ...any) {
-	log.Print(a...)
+	fmt.Println(a...)
 }
 
 type handler struct{}
@@ -52,5 +52,5 @@ func (handler) HandleTick(_ *cooldown.CoolDown, current int64) {
 }
 
 func (handler) HandleStop(_ *cooldown.CoolDown, cause cooldown.StopCause) {
-	l("stop cause ", cause)
+	l("stop cause", cause)
 }

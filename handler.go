@@ -8,7 +8,7 @@ import (
 // Context ...
 type Context = event.Context[*CoolDown]
 
-// Handler is handler of the main CoolDown actions.
+// Handler is interface that implements basic handler of the CoolDown actions.
 type Handler interface {
 	// HandleStart handles start with the ability to cancel it.
 	HandleStart(ctx *Context)
@@ -21,7 +21,7 @@ type Handler interface {
 	HandleStop(cooldown *CoolDown, cause StopCause)
 }
 
-// NopHandler is no-operation handler of Handler.
+// NopHandler is no-operation implementation of Handler.
 type NopHandler struct{}
 
 func (NopHandler) HandleStart(*Context)            {}
