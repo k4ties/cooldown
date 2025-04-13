@@ -62,6 +62,8 @@ func (c *CoolDown) tickTask(ctx context.Context, ticker *time.Ticker, timer *tim
 		case <-(<-chan struct{})(renew): // only receive
 			ticker.Reset(tickDuration())
 			timer.Reset(dur)
+
+			c.exp.Store(time.Now().Add(dur))
 		case <-ctx.Done():
 			cause = StopCauseCancelled
 			return
