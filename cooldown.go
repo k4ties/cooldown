@@ -2,22 +2,22 @@ package cooldown
 
 import (
 	"context"
+	"github.com/df-mc/atomic"
 	"github.com/df-mc/dragonfly/server/event"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 // CoolDown represents a cooldown with per-tick handler and renew function.
 type CoolDown struct {
-	exp atomic.Value //time.Time
+	exp atomic.Value[time.Time]
 
-	cancel  atomic.Value //context.CancelCauseFunc
-	handler atomic.Value //Handler
+	cancel  atomic.Value[context.CancelCauseFunc]
+	handler atomic.Value[Handler]
 
 	wg sync.WaitGroup
 
-	renew atomic.Value //chan struct{}
+	renew atomic.Value[chan struct{}]
 }
 
 // New returns new blank cooldown.
@@ -65,16 +65,16 @@ func (c *CoolDown) Renew() {
 		return
 	}
 
-	c.renewChan() <- struct{}{}
+	c.renewChanWrite() <- struct{}{}
 }
 
 // Remaining returns time until expiration of the CoolDown.
 func (c *CoolDown) Remaining() time.Duration {
 	exp := c.exp.Load()
-	if exp == nil {
+	if exp == (time.Time{}) {
 		return -1
 	}
-	return time.Until(exp.(time.Time))
+	return time.Until(exp)
 }
 
 // Stop resets current cooldown. If currently CoolDown ticker is active, it will be
@@ -91,7 +91,7 @@ func (c *CoolDown) reset(cause StopCause) {
 		cancel(cause)
 		c.cancel.Store(zeroCancel)
 	}
-	if renewChan := c.renewChan(); renewChan != nil {
+	if renewChan := c.renewChanWrite(); c.hasRenewChan() {
 		close(renewChan)
 		c.renew.Store(*new(chan struct{}))
 	}
@@ -102,10 +102,10 @@ func (c *CoolDown) reset(cause StopCause) {
 // Active returns true if cooldown is currently active.
 func (c *CoolDown) Active() bool {
 	exp := c.exp.Load()
-	if exp == nil {
+	if exp == (time.Time{}) {
 		return false
 	}
-	return exp.(time.Time).After(time.Now())
+	return exp.After(time.Now())
 }
 
 // Handle sets new handler to the cooldown. If this handler is nil, handler will
@@ -132,16 +132,26 @@ func (c *CoolDown) getCancel() context.CancelCauseFunc {
 	if val == nil {
 		return nil
 	}
-	return val.(context.CancelCauseFunc)
+	return val
 }
 
 // renewChan ...
-func (c *CoolDown) renewChan() chan<- struct{} {
+func (c *CoolDown) renewChan() chan struct{} {
 	val := c.renew.Load()
 	if val == nil {
 		return nil
 	}
-	return val.(chan struct{})
+	return val
+}
+
+// renewChanWrite ...
+func (c *CoolDown) renewChanWrite() chan<- struct{} {
+	return c.renewChan()
+}
+
+// renewChanWrite ...
+func (c *CoolDown) renewChanRead() <-chan struct{} {
+	return c.renewChan()
 }
 
 // hasRenewChan ...

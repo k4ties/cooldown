@@ -18,11 +18,7 @@ func main() {
 	// start
 	cd.Start(time.Second)
 
-	select {
-	case <-time.After(time.Second * 2):
-		// tick 1s
-		// stop cause expired
-	}
+	<-time.After(time.Second * 2)
 }
 
 func l(a ...any) {

@@ -43,13 +43,11 @@ func (c *CoolDown) tickTask(ctx context.Context, ticker *time.Ticker, timer *tim
 		c.Handler().HandleStop(c, cause)
 	}()
 
-	renew := make(chan struct{})
-
 	if c.hasRenewChan() {
 		panic("tried to start ticking when already ticking")
 	}
 
-	c.renew.Store(renew)
+	c.renew.Store(make(chan struct{}))
 
 	for {
 		select {
@@ -59,7 +57,7 @@ func (c *CoolDown) tickTask(ctx context.Context, ticker *time.Ticker, timer *tim
 		case <-timer.C:
 			cause = StopCauseExpired
 			return
-		case <-(<-chan struct{})(renew): // only receive
+		case <-c.renewChanRead():
 			ticker.Reset(tickDuration())
 			timer.Reset(dur)
 

@@ -1,2 +1,4 @@
+github.com/df-mc/atomic v1.10.0 h1:0ZuxBKwR/hxcFGorKiHIp+hY7hgY+XBTzhCYD2NqSEg=
+github.com/df-mc/atomic v1.10.0/go.mod h1:Gw9rf+rPIbydMjA329Jn4yjd/O2c/qusw3iNp4tFGSc=
 github.com/df-mc/dragonfly v0.10.3 h1:t0mxRvjjgG8uBevqqzejJVL2M6obi6RYePMTPDlXo74=
 github.com/df-mc/dragonfly v0.10.3/go.mod h1:pO7nuyRKV50ZVZzB7AhTMU/0p4cvk1/yCu43vFqAzcI=
