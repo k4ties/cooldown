@@ -75,9 +75,9 @@ func (c *WithVal[T]) Tick(data *TickData, val T) {
 	}
 
 	stopRoutine := func() {
-		data.WaitGroup.Done()
-		data.Timer.Stop()
 		c.SetTickerActive(false)
+		data.Timer.Stop()
+		data.WaitGroup.Done()
 	}
 
 	select {
