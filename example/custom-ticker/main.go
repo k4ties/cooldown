@@ -40,16 +40,16 @@ func tickerOption() cooldown.Option[*exampleContextValue] {
 			cd.SetCancel(cancel)
 
 			go func() {
+				cd.SetTickerActive(true)
+
 				ticker := time.NewTicker(time.Second / 20)
 				defer ticker.Stop()
 
 				for {
 					select {
 					case <-ticker.C:
-						ok := cd.Tick(data, newVal()) // we're setting value by ourselves
-						if !ok {
-							return
-						}
+						// we're setting value by ourselves
+						cd.Tick(data, newVal())
 					}
 				}
 			}()

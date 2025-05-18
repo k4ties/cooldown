@@ -18,7 +18,8 @@ type WithVal[T any] struct {
 	handler atomic.Pointer[HandlerWithVal[T]]
 	wg      sync.WaitGroup
 
-	taskFunc StartTaskFunc
+	taskFunc     StartTaskFunc
+	tickerActive atomic.Bool
 }
 
 // NewWithVal returns new blank cooldown with value.
@@ -166,6 +167,11 @@ func (c *WithVal[T]) hasRenewChan() bool {
 // SetCancel ...
 func (c *WithVal[T]) SetCancel(val context.CancelCauseFunc) {
 	c.cancel.Store(&val)
+}
+
+// SetTickerActive ...
+func (c *WithVal[T]) SetTickerActive(status bool) {
+	c.tickerActive.Store(status)
 }
 
 // convContext ...

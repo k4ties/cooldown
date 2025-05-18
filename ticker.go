@@ -46,16 +46,15 @@ func (c *WithVal[T]) startTick(data *TickData) {
 	c.cancel.Store(&cancel)
 
 	go func() {
+		c.SetTickerActive(true)
+
 		ticker := time.NewTicker(tickDuration())
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				ok := c.Tick(data, *new(T))
-				if !ok {
-					return
-				}
+				c.Tick(data, *new(T))
 			}
 		}
 	}()
@@ -70,29 +69,30 @@ type TickData struct {
 }
 
 // Tick ...
-func (c *WithVal[T]) Tick(data *TickData, val T) bool {
+func (c *WithVal[T]) Tick(data *TickData, val T) {
+	if c.tickerActive.Load() {
+		return
+	}
+
 	stopRoutine := func() {
 		data.WaitGroup.Done()
 		data.Timer.Stop()
+		c.SetTickerActive(false)
 	}
 
 	select {
-	default:
-		*data.TickPtr++
-		c.Handler().HandleTick(c, *data.TickPtr, val)
 	case <-data.Timer.C:
 		c.reset(StopCauseExpired, nil)
 		stopRoutine()
-		return false
+	case <-data.Context.Done():
+		stopRoutine()
 	case <-c.renewChanRead():
 		data.Timer.Reset(data.Duration)
 
 		exp := time.Now().Add(data.Duration)
 		c.exp.Store(&exp)
-	case <-data.Context.Done():
-		stopRoutine()
-		return false
+	default:
+		*data.TickPtr++
+		c.Handler().HandleTick(c, *data.TickPtr, val)
 	}
-
-	return true
 }
