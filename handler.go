@@ -2,32 +2,32 @@ package cooldown
 
 import (
 	"errors"
-	"github.com/df-mc/dragonfly/server/event"
+	"github.com/k4ties/cooldown/internal/event"
 )
 
-// Context ...
-type Context = event.Context[*CoolDown]
+// ContextWithVal ...
+type ContextWithVal[T any] = event.Context[*WithVal[T]]
 
-// Handler is interface that implements basic handler of the CoolDown actions.
-type Handler interface {
+// HandlerWithVal is interface that implements basic handler of the CoolDown actions.
+type HandlerWithVal[T any] interface {
 	// HandleStart handles start with the ability to cancel it.
-	HandleStart(ctx *Context)
+	HandleStart(ctx *ContextWithVal[T], val T)
 	// HandleRenew handles renew with the ability to cancel it.
-	HandleRenew(ctx *Context)
+	HandleRenew(ctx *ContextWithVal[T], val T)
 	// HandleTick handles every tick of the cooldown (variable TicksPerSecond). We can handle every
 	// second, two seconds or any amount that we want by [tickCount % tps == 0] logic.
-	HandleTick(cooldown *CoolDown, current int64)
+	HandleTick(cooldown *WithVal[T], current int64, val T)
 	// HandleStop handles stop of the CoolDown, with the specified cause.
-	HandleStop(cooldown *CoolDown, cause StopCause)
+	HandleStop(cooldown *WithVal[T], cause StopCause, val T)
 }
 
 // NopHandler is no-operation implementation of Handler.
-type NopHandler struct{}
+type NopHandler[T any] struct{}
 
-func (NopHandler) HandleStart(*Context)            {}
-func (NopHandler) HandleRenew(*Context)            {}
-func (NopHandler) HandleTick(*CoolDown, int64)     {}
-func (NopHandler) HandleStop(*CoolDown, StopCause) {}
+func (NopHandler[T]) HandleStart(*ContextWithVal[T], T)    {}
+func (NopHandler[T]) HandleRenew(*ContextWithVal[T], T)    {}
+func (NopHandler[T]) HandleTick(*WithVal[T], int64, T)     {}
+func (NopHandler[T]) HandleStop(*WithVal[T], StopCause, T) {}
 
 // StopCause ...
 type StopCause error
