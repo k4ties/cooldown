@@ -82,7 +82,7 @@ func (c *WithVal[T]) Tick(data *TickData, val T) {
 
 	select {
 	case <-data.Timer.C:
-		c.reset(StopCauseExpired, nil)
+		c.reset(StopCauseExpired, val)
 		stopRoutine()
 	case <-data.Context.Done():
 		stopRoutine()
