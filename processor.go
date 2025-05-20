@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/k4ties/cooldown/internal/atomic"
 	"github.com/k4ties/gq"
+	"github.com/sasha-s/go-deadlock"
 	"io"
 	"sync"
 	"time"
@@ -38,7 +39,7 @@ type processor struct {
 	close   sync.Once
 
 	cooldowns   gq.Set[processable]
-	cooldownsMu sync.RWMutex
+	cooldownsMu deadlock.RWMutex
 
 	cancel atomic.Value[context.CancelFunc]
 	ticker atomic.Value[*time.Ticker]
