@@ -1,15 +1,11 @@
 package cooldown
 
-type Option[T any] = func(*WithVal[T])
+// ValuedOption ...
+type ValuedOption[T any] = func(*Valued[T])
 
-func StartFunc[T any](f StartTaskFunc) Option[T] {
-	return func(c *WithVal[T]) {
-		c.taskFunc = f
-	}
-}
-
-func WithHandler[T any](h HandlerWithVal[T]) Option[T] {
-	return func(w *WithVal[T]) {
-		w.Handle(h)
+// OptionHandler is used to set custom handlers to the Valued cooldown.
+func OptionHandler[T any](h ValuedHandler[T]) ValuedOption[T] {
+	return func(cd *Valued[T]) {
+		cd.handler.Store(h)
 	}
 }
