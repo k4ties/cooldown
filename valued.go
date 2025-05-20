@@ -79,6 +79,8 @@ func (cooldown *Valued[T]) Stop(val T) {
 
 	cause := StopCauseCancelled
 	cooldown.Handler().HandleStop(cooldown, StopCauseCancelled, val)
+
+	Proc.Remove(cooldown)
 	cooldown.stop(cause, false) // already handled
 }
 
