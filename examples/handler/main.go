@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"github.com/k4ties/cooldown"
 	"log"
 	"time"
 )
 
 func main() {
+	cooldown.Proc.StartTracking(context.Background(), time.Second/20)
+
 	cd := cooldown.New()
 	cd.Handle(&handler{})
 

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"github.com/k4ties/cooldown"
 	"log"
 	"time"
 )
 
 func main() {
+	cooldown.Proc.StartTracking(context.Background(), time.Second/20)
+
 	basic := cooldown.NewBasic()
 	lf("started basic cooldown")
 	basic.Set(time.Second)

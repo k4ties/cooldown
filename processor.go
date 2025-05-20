@@ -13,19 +13,6 @@ import (
 // Proc is current cooldown Processor.
 var Proc = NewDefaultProcessor()
 
-// StartProcessorOnInit ...
-var StartProcessorOnInit = atomic.NewValue(true)
-
-func init() {
-	time.AfterFunc(time.Millisecond, func() {
-		if v, ok := StartProcessorOnInit.Load(); ok && v {
-			ctx := context.Background()
-			proc := Proc
-			go proc.StartTracking(ctx, tickDuration())
-		}
-	})
-}
-
 // Processor is used to track processable(s) expiration(s).
 type Processor interface {
 	io.Closer
