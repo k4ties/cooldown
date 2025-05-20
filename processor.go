@@ -66,14 +66,15 @@ func (processor *processor) StartTracking(parent context.Context, every time.Dur
 		select {
 		case <-ticker.C:
 			func() {
-				processor.cooldownsMu.RLock()
-				defer processor.cooldownsMu.RUnlock()
+				processor.cooldownsMu.Lock()
+				defer processor.cooldownsMu.Unlock()
 
 				for cooldown := range processor.cooldowns {
 					// checking if cooldown is expired
 					if expiration := getExpiration(cooldown); expiration.Before(time.Now()) {
 						// expired
 						cooldown.stop(StopCauseExpired, true)
+						processor.remove(cooldown)
 					}
 				}
 			}()
@@ -95,10 +96,15 @@ func (processor *processor) Append(p processable) {
 // Remove ...
 func (processor *processor) Remove(p processable) {
 	processor.cooldownsMu.Lock()
+	processor.remove(p)
+	processor.cooldownsMu.Unlock()
+}
+
+// remove removes processable from the processor set, if it exists.
+func (processor *processor) remove(p processable) {
 	if processor.cooldowns.Contains(p) {
 		processor.cooldowns.Delete(p)
 	}
-	processor.cooldownsMu.Unlock()
 }
 
 // Running should return true, if Processor is currently running.

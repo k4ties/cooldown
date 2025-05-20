@@ -91,8 +91,6 @@ func (cooldown *Valued[T]) stop(cause StopCause, handle bool) {
 
 	cooldown.duration.Store(-1)
 	cooldown.basic.Reset()
-
-	Proc.Remove(cooldown)
 }
 
 // Handler returns current cooldown handler. If it is not set, NopHandler will be returned.
