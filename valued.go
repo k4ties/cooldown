@@ -81,11 +81,11 @@ func (cooldown *Valued[T]) Stop(val T) {
 	cooldown.Handler().HandleStop(cooldown, StopCauseCancelled, val)
 
 	Proc.Remove(cooldown)
-	cooldown.stop(cause, false) // already handled
+	cooldown.UnsafeStop(cause, false) // already handled
 }
 
-// stop implements processable.
-func (cooldown *Valued[T]) stop(cause StopCause, handle bool) {
+// UnsafeStop implements processable.
+func (cooldown *Valued[T]) UnsafeStop(cause StopCause, handle bool) {
 	if handle {
 		var zeroT T
 		cooldown.Handler().HandleStop(cooldown, cause, zeroT)

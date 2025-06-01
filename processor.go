@@ -17,11 +17,11 @@ var Proc = NewDefaultProcessor()
 type Processor interface {
 	io.Closer
 	// StartTracking start tracking cooldown expirations.
-	StartTracking(parent context.Context, every time.Duration)
+	StartTracking(parent context.Context)
 	// Append appends processable object to the Processor.
-	Append(p processable)
+	Append(p Processable)
 	// Remove removes processable object from the Processor, if it existed.
-	Remove(p processable)
+	Remove(p Processable)
 	// Running returns true, if processor is currently running.
 	Running() bool
 }
@@ -31,40 +31,33 @@ type processor struct {
 	running atomic.Value[bool]
 	close   sync.Once
 
-	cooldowns   gq.Set[processable]
+	cooldowns   gq.Set[Processable]
 	cooldownsMu deadlock.RWMutex
 
 	cancel atomic.Value[context.CancelFunc]
-	ticker atomic.Value[*time.Ticker]
 }
 
 // NewDefaultProcessor creates new default Processor impl.
 func NewDefaultProcessor() Processor {
-	proc := &processor{cooldowns: make(gq.Set[processable])}
+	proc := &processor{cooldowns: make(gq.Set[Processable])}
 	proc.cancel = atomic.NewValue[context.CancelFunc]()
-	proc.ticker = atomic.NewValue[*time.Ticker]()
 	proc.running = atomic.NewValue[bool]()
 	return proc
 }
 
 // StartTracking starts tracking of processable(s) expiration.
-func (processor *processor) StartTracking(parent context.Context, every time.Duration) {
+func (processor *processor) StartTracking(parent context.Context) {
 	ctx, cancel := context.WithCancel(parent)
-
 	processor.cancel.Store(cancel)
-	processor.ticker.Store(time.NewTicker(every))
 
 	processor.running.Store(true)
 	defer processor.running.Store(false)
 
 	for {
-		ticker, ok := processor.ticker.Load()
-		if !ok {
-			return
-		}
-
 		select {
-		case <-ticker.C:
+		case <-ctx.Done():
+			return
+		default:
 			func() {
 				processor.cooldownsMu.Lock()
 				defer processor.cooldownsMu.Unlock()
@@ -73,19 +66,17 @@ func (processor *processor) StartTracking(parent context.Context, every time.Dur
 					// checking if cooldown is expired
 					if expiration := getExpiration(cooldown); expiration.Before(time.Now()) {
 						// expired
-						cooldown.stop(StopCauseExpired, true)
+						cooldown.UnsafeStop(StopCauseExpired, true)
 						processor.remove(cooldown)
 					}
 				}
 			}()
-		case <-ctx.Done():
-			return
 		}
 	}
 }
 
 // Append ...
-func (processor *processor) Append(p processable) {
+func (processor *processor) Append(p Processable) {
 	processor.cooldownsMu.Lock()
 	if !processor.cooldowns.Contains(p) {
 		processor.cooldowns.Add(p)
@@ -94,14 +85,14 @@ func (processor *processor) Append(p processable) {
 }
 
 // Remove ...
-func (processor *processor) Remove(p processable) {
+func (processor *processor) Remove(p Processable) {
 	processor.cooldownsMu.Lock()
 	processor.remove(p)
 	processor.cooldownsMu.Unlock()
 }
 
 // remove removes processable from the processor set, if it exists.
-func (processor *processor) remove(p processable) {
+func (processor *processor) remove(p Processable) {
 	if processor.cooldowns.Contains(p) {
 		processor.cooldowns.Delete(p)
 	}
@@ -131,7 +122,7 @@ func (processor *processor) Close() error {
 
 		// Forcing all cooldowns to stop
 		for cooldown := range processor.cooldowns {
-			cooldown.stop(StopCauseClosed, true)
+			cooldown.UnsafeStop(StopCauseClosed, true)
 			// After cooldown is stopped, deleting it from the set
 			processor.cooldowns.Delete(cooldown)
 		}

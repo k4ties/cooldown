@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	cooldown.Proc.StartTracking(context.Background(), time.Second/20)
+	cooldown.Proc.StartTracking(context.Background())
 
 	cd := cooldown.NewValued[string]()
 	cd.Handle(&handler[string]{})

@@ -2,16 +2,15 @@ package cooldown
 
 import "time"
 
-// TODO export this and stop method
-// processable ...
-type processable interface {
+// Processable ...
+type Processable interface {
 	// Remaining ...
 	Remaining() time.Duration
-	// stop should stop the processable object.
-	stop(cause StopCause, handle bool)
+	// UnsafeStop should stop the processable object unsafely (within mutex lock).
+	UnsafeStop(cause StopCause, handle bool)
 }
 
 // getExpiration ...
-func getExpiration(p processable) time.Time {
+func getExpiration(p Processable) time.Time {
 	return time.Now().Add(p.Remaining())
 }

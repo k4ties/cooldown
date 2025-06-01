@@ -27,9 +27,9 @@ func (cooldown *CoolDown) Stop() {
 	cooldown.valued.Stop(struct{}{})
 }
 
-// stop ...
-func (cooldown *CoolDown) stop(cause StopCause, handle bool) {
-	cooldown.valued.stop(cause, handle)
+// UnsafeStop ...
+func (cooldown *CoolDown) UnsafeStop(cause StopCause, handle bool) {
+	cooldown.valued.UnsafeStop(cause, handle)
 }
 
 // Handler ...

@@ -39,7 +39,7 @@ func (cooldown *Basic) Active() bool {
 	}
 	now := time.Now()
 	// If expiration date is before current date, it is expired. If it is not, expiration date
-	// havent been passed
+	// haven't been passed
 	return !expiration.Before(now)
 }
 
