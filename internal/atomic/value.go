@@ -31,6 +31,15 @@ func (value Value[T]) Load() (T, bool) {
 	return val, ok
 }
 
+// MustLoad tries to load value. If error was occurred, it'll panic.
+func (value Value[T]) MustLoad() T {
+	v, ok := value.Load()
+	if !ok {
+		panic("cannot load value")
+	}
+	return v
+}
+
 // Swap swaps current Value val with the specified one. If currently Value has not val, zero T and
 // false is returned.
 func (value Value[T]) Swap(val T) (old T, hasOld bool) {

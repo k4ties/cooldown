@@ -1,6 +1,7 @@
 package cooldown
 
 import (
+	"errors"
 	"github.com/k4ties/cooldown/internal/atomic"
 	"github.com/k4ties/cooldown/internal/event"
 	"time"
@@ -17,6 +18,8 @@ type Valued[T any] struct {
 
 	duration atomic.Value[time.Duration]
 	handler  atomic.Value[ValuedHandler[T]]
+
+	timer atomic.Value[*time.Timer]
 }
 
 // NewValued creates new Valued cooldown.
@@ -25,6 +28,7 @@ func NewValued[T any](opts ...ValuedOption[T]) *Valued[T] {
 	cooldown.basic = NewBasic()
 	cooldown.duration = atomic.NewValue[time.Duration]()
 	cooldown.handler = atomic.NewValue[ValuedHandler[T]]()
+	cooldown.timer = atomic.NewValue[*time.Timer]()
 	for _, opt := range opts {
 		opt(cooldown)
 	}
@@ -67,7 +71,10 @@ func (cooldown *Valued[T]) Start(dur time.Duration, val T) {
 	cooldown.duration.Store(dur)
 	cooldown.basic.Set(dur)
 
-	Proc.Append(cooldown)
+	cooldown.timer.Store(time.AfterFunc(dur, func() {
+		cooldown.timer.Store(nil)
+		cooldown.UnsafeStop(StopCauseExpired, true)
+	}))
 }
 
 // Stop stops the cooldown, if it is currently active.
@@ -79,8 +86,6 @@ func (cooldown *Valued[T]) Stop(val T) {
 
 	cause := StopCauseCancelled
 	cooldown.Handler().HandleStop(cooldown, StopCauseCancelled, val)
-
-	Proc.Remove(cooldown)
 	cooldown.UnsafeStop(cause, false) // already handled
 }
 
@@ -93,6 +98,11 @@ func (cooldown *Valued[T]) UnsafeStop(cause StopCause, handle bool) {
 
 	cooldown.duration.Store(-1)
 	cooldown.basic.Reset()
+
+	if errors.Is(cause, StopCauseCancelled) {
+		cooldown.timer.MustLoad().Stop()
+		cooldown.timer.Store(nil)
+	}
 }
 
 // Handler returns current cooldown handler. If it is not set, NopHandler will be returned.
