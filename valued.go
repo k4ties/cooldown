@@ -54,6 +54,7 @@ func (cooldown *Valued[T]) Renew(val T) {
 	}
 
 	cooldown.basic.Set(duration)
+	cooldown.timer.MustLoad().Reset(duration)
 }
 
 // Start starts the cooldown, if it is not currently active.
