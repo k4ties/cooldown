@@ -27,11 +27,6 @@ func (cooldown *CoolDown) Stop() {
 	cooldown.valued.Stop(struct{}{})
 }
 
-// UnsafeStop ...
-func (cooldown *CoolDown) UnsafeStop(cause StopCause, handle bool) {
-	cooldown.valued.UnsafeStop(cause, handle)
-}
-
 // Handler ...
 func (cooldown *CoolDown) Handler() Handler {
 	return convertFromValuedHandler(cooldown.valued.Handler(), cooldown.valued)

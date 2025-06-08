@@ -29,6 +29,7 @@ func NewValued[T any](opts ...ValuedOption[T]) *Valued[T] {
 	cooldown.duration = atomic.NewValue[time.Duration]()
 	cooldown.handler = atomic.NewValue[ValuedHandler[T]]()
 	cooldown.timer = atomic.NewValue[*time.Timer]()
+	cooldown.Handle(NopValuedHandler[T]{})
 	for _, opt := range opts {
 		opt(cooldown)
 	}
@@ -73,8 +74,7 @@ func (cooldown *Valued[T]) Start(dur time.Duration, val T) {
 	cooldown.basic.Set(dur)
 
 	cooldown.timer.Store(time.AfterFunc(dur, func() {
-		cooldown.timer.Store(nil)
-		cooldown.UnsafeStop(StopCauseExpired, true)
+		cooldown.stop(StopCauseExpired, true)
 	}))
 }
 
@@ -86,12 +86,11 @@ func (cooldown *Valued[T]) Stop(val T) {
 	}
 
 	cause := StopCauseCancelled
-	cooldown.Handler().HandleStop(cooldown, StopCauseCancelled, val)
-	cooldown.UnsafeStop(cause, false) // already handled
+	cooldown.Handler().HandleStop(cooldown, cause, val)
+	cooldown.stop(cause, false) // already handled
 }
 
-// UnsafeStop implements processable.
-func (cooldown *Valued[T]) UnsafeStop(cause StopCause, handle bool) {
+func (cooldown *Valued[T]) stop(cause StopCause, handle bool) {
 	if handle {
 		var zeroT T
 		cooldown.Handler().HandleStop(cooldown, cause, zeroT)
