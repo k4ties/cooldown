@@ -2,15 +2,15 @@ package atomic
 
 import "sync/atomic"
 
-// Value is used to use atomic.Value without type assertion and panic risks.
+// Value is used to use atomic.Pointer without pointers. (lol)
 type Value[T any] struct {
-	v *atomic.Value
+	v *atomic.Pointer[T]
 }
 
 // NewValue creates new Value impl.
 func NewValue[T any](val ...T) Value[T] {
 	v := Value[T]{
-		v: &atomic.Value{},
+		v: &atomic.Pointer[T]{},
 	}
 	if len(val) > 0 {
 		v.Store(val[0])
@@ -27,8 +27,7 @@ func (value Value[T]) Load() (T, bool) {
 		return zero, false
 	}
 
-	val, ok := v.(T)
-	return val, ok
+	return *v, true
 }
 
 // MustLoad tries to load value. If error was occurred, it'll panic.
@@ -50,10 +49,10 @@ func (value Value[T]) Swap(val T) (old T, hasOld bool) {
 
 // CompareAndSwap ...
 func (value Value[T]) CompareAndSwap(old, new T) (swapped bool) {
-	return value.v.CompareAndSwap(old, new)
+	return value.v.CompareAndSwap(&old, &new)
 }
 
 // Store ...
 func (value Value[T]) Store(val T) {
-	value.v.Store(val)
+	value.v.Store(&val)
 }
