@@ -18,7 +18,8 @@ func convertFromValuedHandler(from ValuedHandler[struct{}], cd *Valued[struct{}]
 	}
 }
 
-// handler is Handler implementation that redirects actions to parent ValuedHandler.
+// handler is Handler implementation that redirects actions to parent
+// ValuedHandler.
 type handler struct {
 	parent   ValuedHandler[struct{}]
 	cooldown *Valued[struct{}]
@@ -45,7 +46,8 @@ func (h handler) HandleStop(_ *CoolDown, cause StopCause) {
 	h.parent.HandleStop(h.cooldown, cause, struct{}{})
 }
 
-// valuedHandler is ValuedHandler implementation that redirects actions to parent Handler.
+// valuedHandler is ValuedHandler implementation that redirects actions to
+// parent Handler.
 type valuedHandler[T any] struct {
 	parent   Handler
 	cooldown *CoolDown

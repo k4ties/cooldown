@@ -5,8 +5,8 @@ package event
 // to use less dependencies
 //
 
-// Context represents the context of an event. Handlers of an event may call methods on the context to change
-// the result of the event.
+// Context represents the context of an event. Handlers of an event may call
+// methods on the context to change the result of the event.
 type Context[T any] struct {
 	cancel bool
 	val    T

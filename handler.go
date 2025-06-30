@@ -9,7 +9,8 @@ type (
 	Context = event.Context[*CoolDown]
 )
 
-// ValuedHandler is interface that implements handler of the all Valued cooldown actions.
+// ValuedHandler is interface that implements handler of the all Valued
+// cooldown actions.
 type ValuedHandler[T any] interface {
 	// HandleStart handles start with the ability to cancel it.
 	HandleStart(ctx *ValuedContext[T], val T)

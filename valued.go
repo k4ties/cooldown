@@ -9,10 +9,11 @@ import (
 
 // Valued represents basic cooldown with renew ability and custom values.
 //
-// Point of values is to use it in transactions and allow other users to handle the context value
-// easily. All actions of the cooldown (like stop, start, renew) accepts a value. My personal
-// opinion is to use in dragonfly (github.com/df-mc/dragonfly) world transactions. If you don't
-// want to use values, there is zero implementation: CoolDown.
+// Point of values is to use it in transactions and allow other users to handle
+// the context value easily. All actions of the cooldown (like stop, start,
+// renew) accepts a value. My personal opinion is to use in dragonfly
+// (github.com/df-mc/dragonfly) world transactions. If you don't want to use
+// values, there is zero implementation: CoolDown.
 type Valued[T any] struct {
 	basic *Basic
 
@@ -105,7 +106,8 @@ func (cooldown *Valued[T]) stop(cause StopCause, handle bool) {
 	}
 }
 
-// Handler returns current cooldown handler. If it is not set, NopHandler will be returned.
+// Handler returns current cooldown handler. If it is not set, NopHandler will
+// be returned.
 func (cooldown *Valued[T]) Handler() ValuedHandler[T] {
 	handler, ok := cooldown.handler.Load()
 	if !ok || handler == nil {
@@ -115,8 +117,8 @@ func (cooldown *Valued[T]) Handler() ValuedHandler[T] {
 	return handler
 }
 
-// Handle updates current cooldown handler. If user entered nil as argument, current handler will
-// be removed.
+// Handle updates current cooldown handler. If user entered nil as argument,
+// current handler will be removed.
 func (cooldown *Valued[T]) Handle(handler ValuedHandler[T]) {
 	// Making sure h is never nil
 	if handler == nil {
