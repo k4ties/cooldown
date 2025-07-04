@@ -18,8 +18,10 @@ func main() {
 	cd.Renew()
 	lf("remaining (after renew): %s", cd.Remaining().String())
 	lf("active: %t", cd.Active())
+	lf("stoping the cooldown")
+	cd.Stop()
 	<-time.After(time.Second + time.Millisecond)
-	lf("(timeout after second) active: %t", cd.Active())
+	lf("(timeout after second) active: %t, remaining: %s", cd.Active(), cd.Remaining().String())
 
 	cd.Start(time.Second * 3)
 	lf("started cooldown for 3 seconds")

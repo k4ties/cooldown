@@ -1,9 +1,8 @@
 package cooldown
 
 import (
-	"errors"
-	"github.com/k4ties/cooldown/internal/atomic"
 	"github.com/k4ties/cooldown/internal/event"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,19 +16,16 @@ import (
 type Valued[T any] struct {
 	basic *Basic
 
-	duration atomic.Value[time.Duration]
-	handler  atomic.Value[ValuedHandler[T]]
+	duration atomic.Pointer[time.Duration]
+	handler  atomic.Pointer[ValuedHandler[T]]
 
-	timer atomic.Value[*time.Timer]
+	timer atomic.Pointer[time.Timer]
 }
 
 // NewValued creates new Valued cooldown.
 func NewValued[T any](opts ...ValuedOption[T]) *Valued[T] {
 	cooldown := &Valued[T]{}
-	cooldown.basic = NewBasic()
-	cooldown.duration = atomic.NewValue[time.Duration]()
-	cooldown.handler = atomic.NewValue[ValuedHandler[T]]()
-	cooldown.timer = atomic.NewValue[*time.Timer]()
+	cooldown.basic = new(Basic)
 	cooldown.Handle(NopValuedHandler[T]{})
 	for _, opt := range opts {
 		opt(cooldown)
@@ -44,8 +40,8 @@ func (cooldown *Valued[T]) Renew(val T) {
 		return
 	}
 
-	duration, ok := cooldown.duration.Load()
-	if duration == -1 || !ok {
+	duration := cooldown.duration.Load()
+	if duration == nil || *duration == -1 {
 		// Failed to load duration
 		return
 	}
@@ -55,8 +51,13 @@ func (cooldown *Valued[T]) Renew(val T) {
 		return
 	}
 
-	cooldown.basic.Set(duration)
-	cooldown.timer.MustLoad().Reset(duration)
+	cooldown.basic.Set(*duration)
+	timer := cooldown.timer.Load()
+	if timer == nil {
+		panic("tried to renew while timer is nil")
+	}
+
+	timer.Reset(*duration)
 }
 
 // Start starts the cooldown, if it is not currently active.
@@ -71,11 +72,15 @@ func (cooldown *Valued[T]) Start(dur time.Duration, val T) {
 		return
 	}
 
-	cooldown.duration.Store(dur)
+	cooldown.duration.Store(&dur)
 	cooldown.basic.Set(dur)
 
+	if cooldown.timer.Load() != nil {
+		panic("tried to start while timer is not nil")
+	}
+
 	cooldown.timer.Store(time.AfterFunc(dur, func() {
-		cooldown.stop(StopCauseExpired, true)
+		cooldown.stop(ErrStopCauseExpired, true)
 	}))
 }
 
@@ -86,7 +91,7 @@ func (cooldown *Valued[T]) Stop(val T) {
 		return
 	}
 
-	cause := StopCauseCancelled
+	cause := ErrStopCauseCancelled
 	cooldown.Handler().HandleStop(cooldown, cause, val)
 	cooldown.stop(cause, false) // already handled
 }
@@ -97,24 +102,30 @@ func (cooldown *Valued[T]) stop(cause StopCause, handle bool) {
 		cooldown.Handler().HandleStop(cooldown, cause, zeroT)
 	}
 
-	cooldown.duration.Store(-1)
+	var dur time.Duration = -1
+	cooldown.duration.Store(&dur)
 	cooldown.basic.Reset()
 
-	if errors.Is(cause, StopCauseCancelled) {
-		cooldown.timer.MustLoad().Stop()
-		cooldown.timer.Store(nil)
+	// Resetting timer
+	timer := cooldown.timer.Load()
+	if timer == nil {
+		panic("tried to stop while timer is nil")
 	}
+
+	timer.Stop()
+	cooldown.timer.Store(nil)
 }
 
 // Handler returns current cooldown handler. If it is not set, NopHandler will
 // be returned.
 func (cooldown *Valued[T]) Handler() ValuedHandler[T] {
-	handler, ok := cooldown.handler.Load()
-	if !ok || handler == nil {
+	handler := cooldown.handler.Load()
+	if handler == nil || *handler == nil {
 		// Should never happen anyway
-		handler = NopValuedHandler[T]{}
+		var nop ValuedHandler[T] = NopValuedHandler[T]{}
+		handler = &nop
 	}
-	return handler
+	return *handler
 }
 
 // Handle updates current cooldown handler. If user entered nil as argument,
@@ -124,7 +135,7 @@ func (cooldown *Valued[T]) Handle(handler ValuedHandler[T]) {
 	if handler == nil {
 		handler = NopValuedHandler[T]{}
 	}
-	cooldown.handler.Store(handler)
+	cooldown.handler.Store(&handler)
 }
 
 // Active returns true if cooldown is currently active.

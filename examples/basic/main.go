@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	basic := cooldown.NewBasic()
+	basic := new(cooldown.Basic)
 	lf("started basic cooldown")
 	basic.Set(time.Second)
 
