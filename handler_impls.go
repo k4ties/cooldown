@@ -4,6 +4,9 @@ import "github.com/k4ties/cooldown/internal/event"
 
 // convertToValuedHandler converts Handler to ValuedHandler[struct{}].
 func convertToValuedHandler(from Handler, cd *CoolDown) ValuedHandler[struct{}] {
+	if from == nil {
+		return NopValuedHandler[struct{}]{}
+	}
 	return valuedHandler[struct{}]{
 		parent:   from,
 		cooldown: cd,
@@ -12,6 +15,9 @@ func convertToValuedHandler(from Handler, cd *CoolDown) ValuedHandler[struct{}] 
 
 // convertFromValuedHandler converts valuedHandler[struct{}] to Handler.
 func convertFromValuedHandler(from ValuedHandler[struct{}], cd *Valued[struct{}]) Handler {
+	if from == nil {
+		return NopHandler{}
+	}
 	return handler{
 		parent:   from,
 		cooldown: cd,
@@ -27,7 +33,7 @@ type handler struct {
 
 // HandleStart ...
 func (h handler) HandleStart(parent *Context) {
-	ctx := convertContext(event.C(h.cooldown))
+	ctx := createContext(h.cooldown)
 	if h.parent.HandleStart(ctx, struct{}{}); ctx.Cancelled() {
 		parent.Cancel()
 	}
@@ -35,7 +41,7 @@ func (h handler) HandleStart(parent *Context) {
 
 // HandleRenew ...
 func (h handler) HandleRenew(parent *Context) {
-	ctx := convertContext(event.C(h.cooldown))
+	ctx := createContext(h.cooldown)
 	if h.parent.HandleRenew(ctx, struct{}{}); ctx.Cancelled() {
 		parent.Cancel()
 	}

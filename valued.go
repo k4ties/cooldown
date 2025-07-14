@@ -1,7 +1,6 @@
 package cooldown
 
 import (
-	"github.com/k4ties/cooldown/internal/event"
 	"sync/atomic"
 	"time"
 )
@@ -22,12 +21,14 @@ type Valued[T any] struct {
 	timer atomic.Pointer[time.Timer]
 }
 
-// NewValued creates new Valued cooldown.
-func NewValued[T any]() *Valued[T] {
-	cooldown := new(Valued[T])
-	cooldown.basic = new(Basic)
-	cooldown.Handle(NopValuedHandler[T]{})
-	return cooldown
+// NewValued creates new Valued cooldown. User can omit handler argument nil.
+func NewValued[T any](handler ValuedHandler[T]) *Valued[T] {
+	cd := &Valued[T]{basic: new(Basic)}
+	if handler != nil {
+		// Only store if not nil, otherwise it can panic
+		cd.handler.Store(&handler)
+	}
+	return cd
 }
 
 // Renew renews the cooldown, if it is currently active.
@@ -43,7 +44,7 @@ func (cooldown *Valued[T]) Renew(val T) {
 		return
 	}
 
-	ctx := convertContext(event.C(cooldown))
+	ctx := createContext(cooldown)
 	if cooldown.Handler().HandleRenew(ctx, val); ctx.Cancelled() {
 		return
 	}
@@ -64,7 +65,7 @@ func (cooldown *Valued[T]) Start(dur time.Duration, val T) {
 		return
 	}
 
-	ctx := convertContext(event.C(cooldown))
+	ctx := createContext(cooldown)
 	if cooldown.Handler().HandleStart(ctx, val); ctx.Cancelled() {
 		return
 	}
@@ -116,20 +117,20 @@ func (cooldown *Valued[T]) stop(cause StopCause, handle bool) {
 // Handler returns current cooldown handler. If it is not set, NopHandler will
 // be returned.
 func (cooldown *Valued[T]) Handler() ValuedHandler[T] {
-	handler := cooldown.handler.Load()
-	if handler == nil || *handler == nil {
-		// Should never happen anyway
+	h := cooldown.handler.Load()
+	if h == nil || *h == nil {
 		var nop ValuedHandler[T] = NopValuedHandler[T]{}
-		handler = &nop
+		h = &nop
 	}
-	return *handler
+	return *h
 }
 
 // Handle updates current cooldown handler. If user entered nil as argument,
 // current handler will be removed.
 func (cooldown *Valued[T]) Handle(handler ValuedHandler[T]) {
-	// Making sure h is never nil
+	// Making sure handler is never nil
 	if handler == nil {
+		// If it is nil, just updating it to no-operation handler
 		handler = NopValuedHandler[T]{}
 	}
 	cooldown.handler.Store(&handler)

@@ -7,8 +7,7 @@ import (
 )
 
 func main() {
-	cd := cooldown.New()
-	cd.Handle(&handler{})
+	cd := cooldown.New(new(handler))
 
 	cd.Start(time.Second)
 	lf("started cooldown")

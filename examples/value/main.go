@@ -7,8 +7,7 @@ import (
 )
 
 func main() {
-	cd := cooldown.NewValued[string]()
-	cd.Handle(&handler[string]{})
+	cd := cooldown.NewValued(new(handler))
 
 	cd.Start(time.Second, "unique value for start 1")
 	lf("started cooldown")
@@ -34,17 +33,17 @@ func lf(f string, a ...any) {
 	log.Printf(f, a...)
 }
 
-type handler[T any] struct{}
+type handler struct{}
 
-func (handler[T]) HandleStart(_ *cooldown.ValuedContext[T], val T) {
+func (handler) HandleStart(_ *cooldown.ValuedContext[string], val string) {
 	lf("handle start [val='%v']", val)
 }
 
-func (handler[T]) HandleRenew(_ *cooldown.ValuedContext[T], val T) {
+func (handler) HandleRenew(_ *cooldown.ValuedContext[string], val string) {
 	lf("handle renew [val='%v']", val)
 }
 
-func (handler[T]) HandleStop(_ *cooldown.Valued[T], cause cooldown.StopCause, val T) {
-	// val may be zero, because if it is expiration stop cause, cooldown sets zero value to it
+func (handler) HandleStop(_ *cooldown.Valued[string], cause cooldown.StopCause, val string) {
+	// val may be zero, because if it is expiration stop cause, library sets zero value to it
 	lf("handle stop [cause='%v', val='%v']", cause, val)
 }

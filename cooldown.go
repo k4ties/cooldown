@@ -8,8 +8,12 @@ type CoolDown struct {
 }
 
 // New creates new CoolDown.
-func New() *CoolDown {
-	return &CoolDown{valued: NewValued[struct{}]()}
+func New(h Handler) *CoolDown {
+	cd := new(CoolDown)
+	cd.valued = NewValued[struct{}](
+		convertToValuedHandler(h, cd),
+	)
+	return cd
 }
 
 // Renew ...

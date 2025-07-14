@@ -6,6 +6,7 @@ import (
 )
 
 // Basic represents very basic cooldown.
+// You can create it simpy with: new(cooldown.Basic)
 type Basic struct {
 	expiration atomic.Pointer[time.Time]
 }
