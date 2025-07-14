@@ -42,8 +42,8 @@ func (cooldown *Basic) Remaining() time.Duration {
 		return -1
 	}
 	expiration := cooldown.expiration.Load()
-	if expiration == nil || expiration.Equal(zeroTime) {
-		return -1
+	if expiration == nil || (*expiration).Equal(zeroTime) {
+		return -2
 	}
 	return time.Until(*expiration)
 }

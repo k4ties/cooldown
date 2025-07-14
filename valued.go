@@ -23,13 +23,10 @@ type Valued[T any] struct {
 }
 
 // NewValued creates new Valued cooldown.
-func NewValued[T any](opts ...ValuedOption[T]) *Valued[T] {
-	cooldown := &Valued[T]{}
+func NewValued[T any]() *Valued[T] {
+	cooldown := new(Valued[T])
 	cooldown.basic = new(Basic)
 	cooldown.Handle(NopValuedHandler[T]{})
-	for _, opt := range opts {
-		opt(cooldown)
-	}
 	return cooldown
 }
 
