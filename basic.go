@@ -48,3 +48,5 @@ func (cooldown *Basic) Remaining() time.Duration {
 	}
 	return time.Until(*expiration)
 }
+
+// TODO optimize pointer dereferencing (currently one pointer can be dereferenced, two and more times in a single function)
