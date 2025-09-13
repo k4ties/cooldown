@@ -31,10 +31,12 @@ type handler struct {
 	cooldown *Valued[struct{}]
 }
 
+var zeroStruct = struct{}{}
+
 // HandleStart ...
 func (h handler) HandleStart(parent *Context) {
 	ctx := createContext(h.cooldown)
-	if h.parent.HandleStart(ctx, struct{}{}); ctx.Cancelled() {
+	if h.parent.HandleStart(ctx, zeroStruct); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
@@ -42,14 +44,14 @@ func (h handler) HandleStart(parent *Context) {
 // HandleRenew ...
 func (h handler) HandleRenew(parent *Context) {
 	ctx := createContext(h.cooldown)
-	if h.parent.HandleRenew(ctx, struct{}{}); ctx.Cancelled() {
+	if h.parent.HandleRenew(ctx, zeroStruct); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
 
 // HandleStop ...
 func (h handler) HandleStop(_ *CoolDown, cause StopCause) {
-	h.parent.HandleStop(h.cooldown, cause, struct{}{})
+	h.parent.HandleStop(h.cooldown, cause, zeroStruct)
 }
 
 // valuedHandler is ValuedHandler implementation that redirects actions to

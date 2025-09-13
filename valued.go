@@ -38,9 +38,13 @@ func (cooldown *Valued[T]) Renew(val T) {
 		return
 	}
 
-	duration := cooldown.duration.Load()
-	if duration == nil || *duration == -1 {
+	durationPtr := cooldown.duration.Load()
+	if durationPtr == nil {
 		// Failed to load duration
+		return
+	}
+	dur := *durationPtr
+	if dur <= 0 {
 		return
 	}
 
@@ -49,13 +53,13 @@ func (cooldown *Valued[T]) Renew(val T) {
 		return
 	}
 
-	cooldown.basic.Set(*duration)
+	cooldown.basic.Set(dur)
 	timer := cooldown.timer.Load()
 	if timer == nil {
 		panic("tried to renew while timer is nil")
 	}
 
-	timer.Reset(*duration)
+	timer.Reset(dur)
 }
 
 // Start starts the cooldown, if it is not currently active.
@@ -136,6 +140,16 @@ func (cooldown *Valued[T]) Handle(handler ValuedHandler[T]) {
 	cooldown.handler.Store(&handler)
 }
 
+// Duration returns duration of the cooldown.
+func (cooldown *Valued[T]) Duration() time.Duration {
+	var dur time.Duration
+	if v := cooldown.duration.Load(); v != nil {
+		val := *v
+		dur = val
+	}
+	return dur
+}
+
 // Active returns true if cooldown is currently active.
 func (cooldown *Valued[T]) Active() bool {
 	return cooldown.basic.Active()
@@ -145,3 +159,5 @@ func (cooldown *Valued[T]) Active() bool {
 func (cooldown *Valued[T]) Remaining() time.Duration {
 	return cooldown.basic.Remaining()
 }
+
+// TODO context support

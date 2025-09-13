@@ -28,13 +28,17 @@ func (cooldown *Basic) Reset() {
 // Active returns true if cooldown is currently active.
 func (cooldown *Basic) Active() bool {
 	expiration := cooldown.expiration.Load()
-	if expiration == nil || expiration.Equal(zeroTime) {
+	if expiration == nil {
+		return false
+	}
+	e := *expiration
+	if e.Equal(zeroTime) {
 		return false
 	}
 	now := time.Now()
 	// If expiration date is before current date, it is expired. If it is not,
 	// expiration date haven't been passed
-	return !(*expiration).Before(now)
+	return !e.Before(now)
 }
 
 // Remaining returns the duration until cooldown expiration.
@@ -43,10 +47,12 @@ func (cooldown *Basic) Remaining() time.Duration {
 		return -1
 	}
 	expiration := cooldown.expiration.Load()
-	if expiration == nil || (*expiration).Equal(zeroTime) {
+	if expiration == nil {
 		return -2
 	}
-	return time.Until(*expiration)
+	e := *expiration
+	if e.Equal(zeroTime) {
+		return -3
+	}
+	return time.Until(e)
 }
-
-// TODO optimize pointer dereferencing (currently one pointer can be dereferenced, two and more times in a single function)
