@@ -1,14 +1,5 @@
 package cooldown
 
-import "github.com/k4ties/cooldown/internal/event"
-
-type (
-	// ValuedContext ...
-	ValuedContext[T any] = event.Context[*Valued[T]]
-	// Context ...
-	Context = event.Context[*CoolDown]
-)
-
 // ValuedHandler is interface that implements handler of the all Valued
 // cooldown actions.
 type ValuedHandler[T any] interface {

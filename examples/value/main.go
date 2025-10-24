@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	cd := cooldown.NewValued(new(handler))
+	cd := cooldown.NewValued[string](cooldown.ValuedOptionHandler(new(handler)))
 
 	cd.Start(time.Second, "unique value for start 1")
 	lf("started cooldown")
