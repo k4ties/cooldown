@@ -33,23 +33,18 @@ type handler struct {
 
 var zeroStruct = struct{}{}
 
-// HandleStart ...
 func (h handler) HandleStart(parent *Context) {
 	ctx := createContext(h.cooldown)
 	if h.parent.HandleStart(ctx, zeroStruct); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-
-// HandleRenew ...
 func (h handler) HandleRenew(parent *Context) {
 	ctx := createContext(h.cooldown)
 	if h.parent.HandleRenew(ctx, zeroStruct); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-
-// HandleStop ...
 func (h handler) HandleStop(_ *CoolDown, cause StopCause) {
 	h.parent.HandleStop(h.cooldown, cause, zeroStruct)
 }
@@ -61,23 +56,18 @@ type valuedHandler[T any] struct {
 	cooldown *CoolDown
 }
 
-// HandleStart ...
 func (handler valuedHandler[T]) HandleStart(parent *ValuedContext[T], _ T) {
 	ctx := event.C(handler.cooldown)
 	if handler.parent.HandleStart(ctx); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-
-// HandleRenew ...
 func (handler valuedHandler[T]) HandleRenew(parent *ValuedContext[T], _ T) {
 	ctx := event.C(handler.cooldown)
 	if handler.parent.HandleRenew(ctx); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-
-// HandleStop ...
 func (handler valuedHandler[T]) HandleStop(_ *Valued[T], cause StopCause, _ T) {
 	handler.parent.HandleStop(handler.cooldown, cause)
 }

@@ -16,6 +16,9 @@ type CoolDown struct {
 func New(opts ...Option) *CoolDown {
 	cd := &CoolDown{valued: NewValued[struct{}]()} // Don't type options here, they will be directly applied to CoolDown
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		opt(cd)
 	}
 	return cd

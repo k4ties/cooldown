@@ -24,12 +24,7 @@ var (
 )
 
 // Valued represents basic cooldown with renew ability and custom values.
-//
-// Point of values is to use it in transactions and allow other users to handle
-// the context value easily. All actions of the cooldown (like stop, start,
-// renew) accepts a value. My personal opinion is to use in dragonfly
-// (github.com/df-mc/dragonfly) world transactions. If you don't want to use
-// values, there is zero implementation: CoolDown.
+// Point of values is to use them as transaction or context value.
 type Valued[T any] struct {
 	// basic is the underlying basic cooldown. It is used to control cooldown
 	// basically (Set, Reset, Remaining).
@@ -51,6 +46,9 @@ type Valued[T any] struct {
 func NewValued[T any](opts ...ValuedOption[T]) *Valued[T] {
 	cd := &Valued[T]{basic: new(Basic)}
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		opt(cd)
 	}
 	return cd

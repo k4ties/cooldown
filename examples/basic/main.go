@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/k4ties/cooldown"
 	"log"
 	"time"
@@ -20,9 +21,18 @@ func main() {
 	lf("active: %t", basic.Active())
 	lf("remaining: %s", basic.Remaining().String())
 
-	<-time.After(time.Second * 4)
+	basic.Pause()
+	lf("paused: %t", basic.Paused())
+	lf("active: %t; remaining: %s", basic.Active(), basic.Remaining())
+
+	<-time.After(time.Second)
+	basic.Resume()
+	lf("resumed cooldown; active: %t, paused: %t", basic.Active(), basic.Paused())
+	lf("active: %t; remaining: %s", basic.Active(), basic.Remaining())
+
+	<-time.After(time.Second * 3)
 }
 
 func lf(f string, a ...any) {
-	log.Printf(f, a...)
+	log.Print(fmt.Sprintf(f, a...))
 }
