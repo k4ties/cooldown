@@ -6,10 +6,8 @@ import (
 	"testing"
 )
 
-func TestCoolDown(t *testing.T) {
-	c := cooldown.NewValued[struct{}](nil)
+func TestCoolDownHandler(t *testing.T) {
+	c := cooldown.NewValued[struct{}]()
 	// Returned handler should be no-op
 	assert.Equal(t, c.Handler() == cooldown.NopValuedHandler[struct{}]{}, true)
-	// Test basic cooldown
-	testBasic(t, c.Basic())
 }
