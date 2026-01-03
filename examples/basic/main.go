@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/k4ties/cooldown"
 	"log"
 	"time"
+
+	"github.com/k4ties/cooldown"
 )
 
 func main() {

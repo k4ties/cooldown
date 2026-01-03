@@ -1,9 +1,10 @@
 package cooldown_test
 
 import (
+	"testing"
+
 	"github.com/go-playground/assert/v2"
 	"github.com/k4ties/cooldown"
-	"testing"
 )
 
 func TestCoolDownHandler(t *testing.T) {

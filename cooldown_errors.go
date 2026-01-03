@@ -9,7 +9,7 @@ type StopCause = error
 var (
 	// ErrStopCauseExpired used when cooldown is expired.
 	ErrStopCauseExpired = errors.New("cooldown expired")
-	// ErrStopCauseCancelled used when cooldown is cancelled.
+	// ErrStopCauseCancelled used when cooldown is canceled.
 	ErrStopCauseCancelled = errors.New("cooldown cancelled")
 	// ErrStopCauseReset used when cooldown is reset by user.
 	ErrStopCauseReset = errors.New("cooldown did reset") // TODO

@@ -16,15 +16,11 @@ type (
 	Option = func(cd *CoolDown)
 )
 
-// convertContext creates new *event.Context with T. ValuedContext is
-// technically equal for this type, but for go compiler it is hard to
-// understand, so we need to additionally convert it to ValuedContext.
+// convertContext creates new ValuedContext instance with T and provided valued
+// cooldown.
 func createContext[T any](cooldown *Valued[T]) *ValuedContext[T] {
 	raw := event.C(cooldown)
-	ctx := (*ValuedContext[T])(
-		raw,
-	)
-	return ctx
+	return raw
 }
 
 /*

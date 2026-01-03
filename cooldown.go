@@ -1,8 +1,6 @@
 package cooldown
 
-import (
-	"time"
-)
+import "time"
 
 // CoolDown is the same Valued cooldown but without values.
 // It uses underlying Valued with empty struct as value.
