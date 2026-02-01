@@ -1,5 +1,5 @@
 # cooldown
-A [Go](https://go.dev/) library, that implements cooldowns in any way.
+A [Go](https://go.dev/) library implementing cooldown.
 
 ### Get started
 
@@ -8,37 +8,38 @@ package main
 
 import (
 	"fmt"
-	"github.com/k4ties/cooldown"
-	"sync/atomic"
+	"sync"
 	"time"
+
+	"github.com/k4ties/cooldown"
 )
 
 func main() {
-	cd := cooldown.New(cooldown.OptionHandler(new(handler)))
+	cd := cooldown.New(cooldown.OptionHandler(new(Handler)))
 	cd.Start(time.Second)
 	cd.Active() // true
-	
+
 	<-time.After(time.Millisecond)
 	cd.Renew()
-	
+
 	<-time.After(time.Second * 3)
 	cd.Stop()
 }
 
-type handler struct {
+type Handler struct {
 	cooldown.NopHandler // implements cooldown.Handler
-	canceled            atomic.Bool
+	first               sync.Once
 }
 
-func (h *handler) HandleStart(ctx *cooldown.Context) {
-	if h.canceled.CompareAndSwap(false, true) {
-		// The event can be cancelled
+func (h *Handler) HandleStart(ctx *cooldown.Context, _ time.Duration) {
+	h.first.Do(func() {
+		// The event can be canceled
 		ctx.Cancel()
-	}
+	})
 	fmt.Println("handle start")
 }
-func (h *handler) HandleStop(cd *cooldown.CoolDown, cause cooldown.StopCause) {
-	// This event cannot be cancelled
+func (h *Handler) HandleStop(_ *cooldown.CoolDown, cause cooldown.StopCause) {
+	// This event cannot be canceled
 	fmt.Printf("handle stop, cause=%v\n", cause)
 }
 
