@@ -37,11 +37,11 @@ func lf(f string, a ...any) {
 
 type handler struct{}
 
-func (h handler) HandleStart(_ *cooldown.Context) {
+func (h handler) HandleStart(*cooldown.Context, time.Duration) {
 	lf("handle start")
 }
 
-func (h handler) HandleRenew(_ *cooldown.Context) {
+func (h handler) HandleRenew(*cooldown.Context, time.Duration) {
 	lf("handle renew")
 }
 

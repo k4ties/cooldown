@@ -1,8 +1,11 @@
 package cooldown
 
-import "github.com/k4ties/cooldown/internal/event"
+import (
+	"time"
 
-// convertToValuedHandler converts Handler to ValuedHandler[struct{}].
+	"github.com/k4ties/cooldown/internal/event"
+)
+
 func convertToValuedHandler(from Handler, cd *CoolDown) ValuedHandler[struct{}] {
 	if from == nil {
 		return NopValuedHandler[struct{}]{}
@@ -13,7 +16,6 @@ func convertToValuedHandler(from Handler, cd *CoolDown) ValuedHandler[struct{}] 
 	}
 }
 
-// convertFromValuedHandler converts valuedHandler[struct{}] to Handler.
 func convertFromValuedHandler(from ValuedHandler[struct{}], cd *Valued[struct{}]) Handler {
 	if from == nil {
 		return NopHandler{}
@@ -24,8 +26,6 @@ func convertFromValuedHandler(from ValuedHandler[struct{}], cd *Valued[struct{}]
 	}
 }
 
-// handler is Handler implementation that redirects actions to parent
-// ValuedHandler.
 type handler struct {
 	parent   ValuedHandler[struct{}]
 	cooldown *Valued[struct{}]
@@ -33,15 +33,15 @@ type handler struct {
 
 var zeroStruct = struct{}{}
 
-func (h handler) HandleStart(parent *Context) {
-	ctx := createContext(h.cooldown)
-	if h.parent.HandleStart(ctx, zeroStruct); ctx.Cancelled() {
+func (h handler) HandleStart(parent *Context, dur time.Duration) {
+	ctx := event.C(h.cooldown)
+	if h.parent.HandleStart(ctx, dur, zeroStruct); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-func (h handler) HandleRenew(parent *Context) {
-	ctx := createContext(h.cooldown)
-	if h.parent.HandleRenew(ctx, zeroStruct); ctx.Cancelled() {
+func (h handler) HandleRenew(parent *Context, dur time.Duration) {
+	ctx := event.C(h.cooldown)
+	if h.parent.HandleRenew(ctx, dur, zeroStruct); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
@@ -49,22 +49,20 @@ func (h handler) HandleStop(_ *CoolDown, cause StopCause) {
 	h.parent.HandleStop(h.cooldown, cause, zeroStruct)
 }
 
-// valuedHandler is ValuedHandler implementation that redirects actions to
-// parent Handler.
 type valuedHandler[T any] struct {
 	parent   Handler
 	cooldown *CoolDown
 }
 
-func (handler valuedHandler[T]) HandleStart(parent *ValuedContext[T], _ T) {
+func (handler valuedHandler[T]) HandleStart(parent *ValuedContext[T], dur time.Duration, _ T) {
 	ctx := event.C(handler.cooldown)
-	if handler.parent.HandleStart(ctx); ctx.Cancelled() {
+	if handler.parent.HandleStart(ctx, dur); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-func (handler valuedHandler[T]) HandleRenew(parent *ValuedContext[T], _ T) {
+func (handler valuedHandler[T]) HandleRenew(parent *ValuedContext[T], dur time.Duration, _ T) {
 	ctx := event.C(handler.cooldown)
-	if handler.parent.HandleRenew(ctx); ctx.Cancelled() {
+	if handler.parent.HandleRenew(ctx, dur); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }

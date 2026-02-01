@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -35,5 +34,5 @@ func main() {
 }
 
 func lf(f string, a ...any) {
-	log.Print(fmt.Sprintf(f, a...))
+	log.Printf(f, a...)
 }

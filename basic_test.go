@@ -1,10 +1,11 @@
 package cooldown_test
 
 import (
-	"github.com/go-playground/assert/v2"
-	"github.com/k4ties/cooldown"
 	"testing"
 	"time"
+
+	"github.com/go-playground/assert/v2"
+	"github.com/k4ties/cooldown"
 )
 
 func TestBasic(t *testing.T) {
@@ -36,9 +37,7 @@ func testCoolDownPause(b anyCoolDown) func(*testing.T) {
 			testCoolDownPauseToggle,
 			testCoolDownPauseState,
 		} {
-			// Reset cooldown each test
 			b.Reset()
-			// And run the test
 			fn(b)(t)
 		}
 	}

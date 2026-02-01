@@ -9,6 +9,6 @@ import (
 
 func TestCoolDownHandler(t *testing.T) {
 	c := cooldown.NewValued[struct{}]()
-	// Returned handler should be no-op
-	assert.Equal(t, c.Handler() == cooldown.NopValuedHandler[struct{}]{}, true)
+	// we did not set the handler, so it should return no-op handler instance by default
+	assert.Equal(t, c.Handler(), cooldown.NopValuedHandler[struct{}]{})
 }

@@ -5,20 +5,17 @@ import (
 	"time"
 )
 
-// Basic represents very basic cooldown. It is 'lazy'.
-// You can create it simpy with: new(cooldown.Basic)
-// You can use your own mutex by calling only 'Unsafe' methods with locking
-// by yourself.
+// Basic represents very basic 'lazy' cooldown.
+// You can create it simpy via new(cooldown.Basic).
 type Basic struct {
-	L sync.Mutex
-	// expiration is pointer to expiration time.
-	// It is nil either if cooldown was just created or if it was reset.
+	L sync.RWMutex
+	// expiration is time when cooldown expires.
 	expiration,
-	// pausedAt is pointer to time when cooldown was paused.
-	pausedAt *time.Time
+	// pausedAt is time when cooldown was paused.
+	pausedAt time.Time
 }
 
-// Set updates state of the cooldown. It resets cooldown each call.
+// Set updates state of the cooldown.
 // If provided duration is negative, cooldown will just reset.
 func (cooldown *Basic) Set(dur time.Duration) {
 	cooldown.L.Lock()
@@ -27,20 +24,15 @@ func (cooldown *Basic) Set(dur time.Duration) {
 }
 
 func (cooldown *Basic) SetUnsafe(dur time.Duration) {
-	// Reset the cooldown data before setting new one
-	// That is mostly important for previously paused cooldowns
 	cooldown.ResetUnsafe()
 	if dur <= 0 {
-		// Nothing to do, cooldown did reset already
 		return
 	}
-	// Storing expiration date pointer
-	expiration := time.Now().Add(dur)
-	cooldown.expiration = &expiration
+	cooldown.expiration = time.Now().Add(dur)
 }
 
-// Pause pauses the cooldown, if it is NOT already paused.
-// It returns true, if cooldown was successfully paused.
+// Pause pauses cooldown if it is not already paused.
+// Returns true if successfully paused.
 func (cooldown *Basic) Pause() bool {
 	cooldown.L.Lock()
 	defer cooldown.L.Unlock()
@@ -52,14 +44,12 @@ func (cooldown *Basic) PauseUnsafe() bool {
 	if !state.Active || state.Paused {
 		return false
 	}
-	pausedAt := time.Now()
-	// Store the paused date pointer
-	cooldown.pausedAt = &pausedAt
+	cooldown.pausedAt = time.Now()
 	return true
 }
 
-// Resume tries to resume the cooldown, if it is paused.
-// It returns true, if cooldown was successfully resumed.
+// Resume resumes the cooldown if it is paused.
+// Returns true if successfully resumed.
 func (cooldown *Basic) Resume() bool {
 	cooldown.L.Lock()
 	defer cooldown.L.Unlock()
@@ -71,27 +61,30 @@ func (cooldown *Basic) ResumeUnsafe() bool {
 		// Cooldown is not paused.
 		return false
 	}
-	// Store nil pointer to paused date
-	cooldown.pausedAt = nil
+	cooldown.pausedAt = time.Time{}
 	return true
 }
 
 // TogglePause toggles the pause state of the cooldown.
-// It returns true, if cooldown was paused.
+// Returns true if cooldown was paused.
 func (cooldown *Basic) TogglePause() (paused bool) {
+	cooldown.L.Lock()
+	defer cooldown.L.Unlock()
+	return cooldown.TogglePauseUnsafe()
+}
+
+func (cooldown *Basic) TogglePauseUnsafe() (paused bool) {
 	if cooldown.PausedUnsafe() {
-		// Cooldown is paused, so resuming it
 		cooldown.ResumeUnsafe()
 		return false
 	}
-	// Cooldown is not paused, so pausing it
 	return cooldown.PauseUnsafe()
 }
 
-// Paused returns true, if cooldown is currently paused.
+// Paused returns true if cooldown is paused.
 func (cooldown *Basic) Paused() bool {
-	cooldown.L.Lock()
-	defer cooldown.L.Unlock()
+	cooldown.L.RLock()
+	defer cooldown.L.RUnlock()
 	return cooldown.PausedUnsafe()
 }
 
@@ -100,7 +93,7 @@ func (cooldown *Basic) PausedUnsafe() bool {
 	return ok
 }
 
-// Reset resets the cooldown data.
+// Reset resets the cooldown state.
 func (cooldown *Basic) Reset() {
 	cooldown.L.Lock()
 	defer cooldown.L.Unlock()
@@ -108,16 +101,13 @@ func (cooldown *Basic) Reset() {
 }
 
 func (cooldown *Basic) ResetUnsafe() {
-	// Our structure can handle nil values, so there are no problems with
-	// storing time pointers as nil
-	cooldown.expiration = nil
-	cooldown.pausedAt = nil
+	cooldown.expiration, cooldown.pausedAt = time.Time{}, time.Time{}
 }
 
 // Active returns true if cooldown is currently active.
 func (cooldown *Basic) Active() bool {
-	cooldown.L.Lock()
-	defer cooldown.L.Unlock()
+	cooldown.L.RLock()
+	defer cooldown.L.RUnlock()
 	return cooldown.ActiveUnsafe()
 }
 
@@ -125,10 +115,10 @@ func (cooldown *Basic) ActiveUnsafe() bool {
 	return cooldown.StateUnsafe().Active
 }
 
-// Remaining returns the duration until cooldown expiration.
+// Remaining returns duration until cooldown expiration.
 func (cooldown *Basic) Remaining() time.Duration {
-	cooldown.L.Lock()
-	defer cooldown.L.Unlock()
+	cooldown.L.RLock()
+	defer cooldown.L.RUnlock()
 	return cooldown.RemainingUnsafe()
 }
 
@@ -138,34 +128,27 @@ func (cooldown *Basic) RemainingUnsafe() time.Duration {
 		return 0
 	}
 	if res.Paused {
-		// Calculate remaining time from paused date
 		return res.Expiration.Sub(res.PausedDate)
 	}
-	// Calculate remaining from current time
 	// Note: Expiration can't be zero here
 	return time.Until(res.Expiration)
 }
 
 func (cooldown *Basic) pausedDateUnsafe() (_ time.Time, _ bool) {
-	tPtr := cooldown.pausedAt
-	if tPtr == nil {
-		return
-	}
-	t := *tPtr
-	return t, !t.IsZero()
+	return cooldown.pausedAt, !cooldown.pausedAt.IsZero()
 }
 
-// BasicState represents the state of the basic cooldown.
+// BasicState represents the state of Basic cooldown.
 type BasicState struct {
-	// Active is true if cooldown is active.
+	// Active marks if cooldown is active.
 	Active,
-	// Paused is true if cooldown is paused.
+	// Paused marks if cooldown is paused.
 	Paused bool
 	// Expiration is the expiration date of the cooldown.
-	// Will be zero, if cooldown is not active.
+	// If cooldown is inactive, it'll be zero time.Time,
 	Expiration,
 	// PausedDate is the date when cooldown was paused.
-	// Will be zero, if cooldown is not paused.
+	// If it wasn't, it'll be zero time.Time.
 	PausedDate time.Time
 }
 
@@ -179,27 +162,18 @@ func (cooldown *Basic) State() (res BasicState) {
 func (cooldown *Basic) StateUnsafe() (res BasicState) {
 	pausedDate, ok := cooldown.pausedDateUnsafe()
 	if ok {
-		// Update the result
 		res.Paused = true
 		res.PausedDate = pausedDate
 	}
 	expiration := cooldown.expiration
-	if expiration == nil {
-		// Not active and not paused
+	if expiration.IsZero() {
 		return
 	}
-	res.Expiration = *expiration
-	if res.Expiration.IsZero() {
-		cooldown.expiration = nil
-		return
-	}
+	res.Expiration = expiration
 	reference := time.Now()
 	if res.Paused {
-		// Calculate if active from the paused date
 		reference = pausedDate
 	}
-	// If expiration date is before current date, it is expired. If it is not,
-	// expiration date haven't been passed
 	res.Active = !res.Expiration.Before(reference)
 	return
 }
