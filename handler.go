@@ -30,6 +30,12 @@ type ValuedHandler[T any] interface {
 	//    // ...
 	// }
 	HandleStop(cooldown *Valued[T], cause StopCause, val T)
+	// HandlePause handles user pausing the cooldown allowing to cancel event
+	// via context.
+	HandlePause(ctx *ValuedContext[T], val T)
+	// HandleResume handles user resuming the cooldown allowing to cancel event
+	// via context.
+	HandleResume(ctx *ValuedContext[T], val T)
 }
 
 type Context = event.Context[*CoolDown]
@@ -57,6 +63,12 @@ type Handler interface {
 	//    // ...
 	// }
 	HandleStop(cooldown *CoolDown, cause StopCause)
+	// HandlePause handles user pausing the cooldown allowing to cancel event
+	// via context.
+	HandlePause(ctx *Context)
+	// HandleResume handles user resuming the cooldown allowing to cancel event
+	// via context.
+	HandleResume(ctx *Context)
 }
 
 // NopValuedHandler is no-operation implementation of ValuedHandler.
@@ -65,6 +77,8 @@ type NopValuedHandler[T any] struct{}
 func (NopValuedHandler[T]) HandleStart(*ValuedContext[T], time.Duration, T) {}
 func (NopValuedHandler[T]) HandleRenew(*ValuedContext[T], time.Duration, T) {}
 func (NopValuedHandler[T]) HandleStop(*Valued[T], StopCause, T)             {}
+func (NopValuedHandler[T]) HandlePause(*ValuedContext[T], T)                {}
+func (NopValuedHandler[T]) HandleResume(*ValuedContext[T], T)               {}
 
 // NopHandler is no-operation implementation of Handler.
 type NopHandler struct{}
@@ -72,3 +86,5 @@ type NopHandler struct{}
 func (NopHandler) HandleStart(*Context, time.Duration) {}
 func (NopHandler) HandleRenew(*Context, time.Duration) {}
 func (NopHandler) HandleStop(*CoolDown, StopCause)     {}
+func (NopHandler) HandlePause(*Context)                {}
+func (NopHandler) HandleResume(*Context)               {}

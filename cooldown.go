@@ -33,14 +33,53 @@ func (cooldown *CoolDown) Renew() {
 	cooldown.valued.Renew(zeroStruct)
 }
 
+func (cooldown *CoolDown) RenewUnsafe() {
+	cooldown.valued.RenewUnsafe(zeroStruct)
+}
+
 // Start ...
 func (cooldown *CoolDown) Start(dur time.Duration) {
 	cooldown.valued.Start(dur, zeroStruct)
 }
 
+func (cooldown *CoolDown) StartUnsafe(dur time.Duration) {
+	cooldown.valued.StartUnsafe(dur, zeroStruct)
+}
+
 // Stop ...
 func (cooldown *CoolDown) Stop() {
 	cooldown.valued.Stop(zeroStruct)
+}
+
+func (cooldown *CoolDown) StopUnsafe() {
+	cooldown.valued.StopUnsafe(zeroStruct)
+}
+
+// Pause ...
+func (cooldown *CoolDown) Pause() bool {
+	return cooldown.valued.Pause(struct{}{})
+}
+
+func (cooldown *CoolDown) PauseUnsafe() bool {
+	return cooldown.valued.PauseUnsafe(struct{}{})
+}
+
+// Resume ...
+func (cooldown *CoolDown) Resume() bool {
+	return cooldown.valued.Resume(struct{}{})
+}
+
+func (cooldown *CoolDown) ResumeUnsafe() bool {
+	return cooldown.valued.ResumeUnsafe(struct{}{})
+}
+
+// TogglePause ...
+func (cooldown *CoolDown) TogglePause() bool {
+	return cooldown.valued.TogglePause(struct{}{})
+}
+
+func (cooldown *CoolDown) TogglePauseUnsafe() bool {
+	return cooldown.valued.TogglePause(struct{}{})
 }
 
 // Handler ...
@@ -58,9 +97,17 @@ func (cooldown *CoolDown) Active() bool {
 	return cooldown.valued.Active()
 }
 
+func (cooldown *CoolDown) ActiveUnsafe() bool {
+	return cooldown.valued.ActiveUnsafe()
+}
+
 // Remaining ...
 func (cooldown *CoolDown) Remaining() time.Duration {
 	return cooldown.valued.Remaining()
+}
+
+func (cooldown *CoolDown) RemainingUnsafe() time.Duration {
+	return cooldown.valued.RemainingUnsafe()
 }
 
 // Valued ...

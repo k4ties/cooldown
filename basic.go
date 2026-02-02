@@ -75,8 +75,7 @@ func (cooldown *Basic) TogglePause() (paused bool) {
 
 func (cooldown *Basic) TogglePauseUnsafe() (paused bool) {
 	if cooldown.PausedUnsafe() {
-		cooldown.ResumeUnsafe()
-		return false
+		return cooldown.ResumeUnsafe()
 	}
 	return cooldown.PauseUnsafe()
 }
@@ -159,21 +158,20 @@ func (cooldown *Basic) State() (res BasicState) {
 	return cooldown.StateUnsafe()
 }
 
-func (cooldown *Basic) StateUnsafe() (res BasicState) {
-	pausedDate, ok := cooldown.pausedDateUnsafe()
-	if ok {
-		res.Paused = true
-		res.PausedDate = pausedDate
+func (cooldown *Basic) StateUnsafe() (state BasicState) {
+	if pausedDate, ok := cooldown.pausedDateUnsafe(); ok {
+		state.Paused = true
+		state.PausedDate = pausedDate
 	}
 	expiration := cooldown.expiration
 	if expiration.IsZero() {
 		return
 	}
-	res.Expiration = expiration
+	state.Expiration = expiration
 	reference := time.Now()
-	if res.Paused {
-		reference = pausedDate
+	if state.Paused {
+		reference = state.PausedDate
 	}
-	res.Active = !res.Expiration.Before(reference)
-	return
+	state.Active = !state.Expiration.Before(reference)
+	return state
 }

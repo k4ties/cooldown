@@ -64,23 +64,27 @@ func (cooldown *Valued[T]) RenewUnsafe(val T) {
 }
 
 // Start ...
-func (cooldown *Valued[T]) Start(dur time.Duration, val T) {
+func (cooldown *Valued[T]) Start(dur time.Duration, val T) bool {
 	cooldown.mu.Lock()
 	defer cooldown.mu.Unlock()
-	cooldown.StartUnsafe(dur, val)
+	return cooldown.StartUnsafe(dur, val)
 }
 
-func (cooldown *Valued[T]) StartUnsafe(dur time.Duration, val T) {
-	if cooldown.ActiveUnsafe() || dur <= 0 {
-		return
+func (cooldown *Valued[T]) StartUnsafe(dur time.Duration, val T) bool {
+	if dur <= 0 {
+		return false
+	}
+	if cooldown.ActiveUnsafe() {
+		cooldown.StopUnsafe(val)
 	}
 	ctx := event.C(cooldown)
 	if cooldown.Handler().HandleStart(ctx, dur, val); ctx.Cancelled() {
-		return
+		return false
 	}
 	cooldown.duration = dur
 	cooldown.timer = time.AfterFunc(dur, cooldown.expire)
 	cooldown.basic.SetUnsafe(dur)
+	return true
 }
 
 func (cooldown *Valued[T]) expire() {
@@ -89,7 +93,7 @@ func (cooldown *Valued[T]) expire() {
 
 	var zeroT T
 	cooldown.Handler().HandleStop(cooldown, ErrStopCauseExpired, zeroT)
-	cooldown.doStopUnsafe()
+	cooldown.doStopUnsafe(zeroT)
 }
 
 // Stop ...
@@ -104,10 +108,13 @@ func (cooldown *Valued[T]) StopUnsafe(val T) {
 		return
 	}
 	cooldown.Handler().HandleStop(cooldown, ErrStopCauseCancelled, val)
-	cooldown.doStopUnsafe()
+	cooldown.doStopUnsafe(val)
 }
 
-func (cooldown *Valued[T]) doStopUnsafe() {
+func (cooldown *Valued[T]) doStopUnsafe(val T) {
+	if cooldown.PausedUnsafe() {
+		cooldown.doResumeUnsafe(val, false) // we will stop the timer
+	}
 	cooldown.duration = 0
 	cooldown.basic.ResetUnsafe()
 
@@ -115,6 +122,80 @@ func (cooldown *Valued[T]) doStopUnsafe() {
 		timer.Stop()
 		cooldown.timer = nil
 	}
+}
+
+// Pause ...
+func (cooldown *Valued[T]) Pause(val T) bool {
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	return cooldown.PauseUnsafe(val)
+}
+
+func (cooldown *Valued[T]) PauseUnsafe(val T) bool {
+	if cooldown.PausedUnsafe() || !cooldown.ActiveUnsafe() {
+		return false
+	}
+	timer := cooldown.timer
+	if timer == nil {
+		return false
+	}
+	ctx := event.C(cooldown)
+	if cooldown.Handler().HandlePause(ctx, val); ctx.Cancelled() {
+		return false
+	}
+	if !cooldown.basic.PauseUnsafe() {
+		return false
+	}
+	ok := timer.Stop()
+	cooldown.timer = nil // Resume will create new timer
+	return ok
+}
+
+// Resume ...
+func (cooldown *Valued[T]) Resume(val T) bool {
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	return cooldown.ResumeUnsafe(val)
+}
+
+func (cooldown *Valued[T]) ResumeUnsafe(val T) bool {
+	return cooldown.doResumeUnsafe(val, true)
+}
+
+func (cooldown *Valued[T]) doResumeUnsafe(val T, resetTimer bool) bool {
+	if !cooldown.PausedUnsafe() {
+		return false
+	}
+	dur := cooldown.duration
+	if dur <= 0 {
+		return false
+	}
+	ctx := event.C(cooldown)
+	if cooldown.Handler().HandleResume(ctx, val); ctx.Cancelled() {
+		return false
+	}
+	if !cooldown.basic.ResumeUnsafe() {
+		return false
+	}
+	if resetTimer {
+		// RemainingUnsafe also accounts for paused state
+		cooldown.timer = time.AfterFunc(cooldown.RemainingUnsafe(), cooldown.expire)
+	}
+	return true
+}
+
+// TogglePause ...
+func (cooldown *Valued[T]) TogglePause(val T) bool {
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	return cooldown.TogglePauseUnsafe(val)
+}
+
+func (cooldown *Valued[T]) TogglePauseUnsafe(val T) bool {
+	if cooldown.PausedUnsafe() {
+		return cooldown.ResumeUnsafe(val)
+	}
+	return cooldown.PauseUnsafe(val)
 }
 
 // Handler ...
@@ -163,4 +244,21 @@ func (cooldown *Valued[T]) RemainingUnsafe() time.Duration {
 	return cooldown.basic.RemainingUnsafe()
 }
 
-// TODO context.Context support ?
+// Paused ...
+func (cooldown *Valued[T]) Paused() bool {
+	cooldown.mu.RLock()
+	defer cooldown.mu.RUnlock()
+	return cooldown.PausedUnsafe()
+}
+
+func (cooldown *Valued[T]) PausedUnsafe() bool {
+	return cooldown.basic.PausedUnsafe()
+}
+
+func (cooldown *Valued[T]) L() *sync.RWMutex {
+	return &cooldown.mu
+}
+
+// TODO context.Context support ? context.AfterFunc
+
+// TODO return errors , maybe create something like 'MustPause()' methods with logger

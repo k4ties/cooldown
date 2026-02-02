@@ -34,7 +34,9 @@ func lf(f string, a ...any) {
 	log.Printf(f, a...)
 }
 
-type handler struct{}
+type handler struct {
+	cooldown.NopValuedHandler[string]
+}
 
 func (handler) HandleStart(_ *cooldown.ValuedContext[string], dur time.Duration, val string) {
 	lf("handle start [val='%v',dur='%s']", val, dur)
