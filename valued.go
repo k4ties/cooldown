@@ -200,6 +200,7 @@ func (cooldown *Valued[T]) TogglePauseUnsafe(val T) bool {
 
 // Handler ...
 func (cooldown *Valued[T]) Handler() ValuedHandler[T] {
+	// if properly initialized this is never nil
 	return *cooldown.handler.Load()
 }
 
