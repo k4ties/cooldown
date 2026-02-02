@@ -153,8 +153,8 @@ type BasicState struct {
 
 // State returns the current state of the basic cooldown.
 func (cooldown *Basic) State() (res BasicState) {
-	cooldown.L.Lock()
-	defer cooldown.L.Unlock()
+	cooldown.L.RLock()
+	defer cooldown.L.RUnlock()
 	return cooldown.StateUnsafe()
 }
 
