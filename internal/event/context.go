@@ -1,9 +1,5 @@
+// Package event is copied from github.com/df-mc/dragonfly/server/event.
 package event
-
-//
-// Copied from github.com/df-mc/dragonfly/server/event/context.go
-// to use less dependencies
-//
 
 // Context represents the context of an event. Handlers of an event may call
 // methods on the context to change the result of the event.

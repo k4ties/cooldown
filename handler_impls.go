@@ -1,8 +1,11 @@
 package cooldown
 
-import "github.com/k4ties/cooldown/internal/event"
+import (
+	"time"
 
-// convertToValuedHandler converts Handler to ValuedHandler[struct{}].
+	"github.com/k4ties/cooldown/internal/event"
+)
+
 func convertToValuedHandler(from Handler, cd *CoolDown) ValuedHandler[struct{}] {
 	if from == nil {
 		return NopValuedHandler[struct{}]{}
@@ -13,19 +16,16 @@ func convertToValuedHandler(from Handler, cd *CoolDown) ValuedHandler[struct{}] 
 	}
 }
 
-// convertFromValuedHandler converts valuedHandler[struct{}] to Handler.
-func convertFromValuedHandler(from ValuedHandler[struct{}], cd *Valued[struct{}]) Handler {
+func convertFromValuedHandler(from ValuedHandler[struct{}], cd *Valued[struct{}]) Handler { // todo: is this even required
 	if from == nil {
 		return NopHandler{}
 	}
-	return handler{
+	return &handler{
 		parent:   from,
 		cooldown: cd,
 	}
 }
 
-// handler is Handler implementation that redirects actions to parent
-// ValuedHandler.
 type handler struct {
 	parent   ValuedHandler[struct{}]
 	cooldown *Valued[struct{}]
@@ -33,51 +33,63 @@ type handler struct {
 
 var zeroStruct = struct{}{}
 
-// HandleStart ...
-func (h handler) HandleStart(parent *Context) {
-	ctx := createContext(h.cooldown)
-	if h.parent.HandleStart(ctx, zeroStruct); ctx.Cancelled() {
+func (h *handler) HandleStart(parent *Context, dur time.Duration) {
+	ctx := event.C(h.cooldown)
+	if h.parent.HandleStart(ctx, dur, zeroStruct); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-
-// HandleRenew ...
-func (h handler) HandleRenew(parent *Context) {
-	ctx := createContext(h.cooldown)
-	if h.parent.HandleRenew(ctx, zeroStruct); ctx.Cancelled() {
+func (h *handler) HandleRenew(parent *Context, dur time.Duration) {
+	ctx := event.C(h.cooldown)
+	if h.parent.HandleRenew(ctx, dur, zeroStruct); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-
-// HandleStop ...
-func (h handler) HandleStop(_ *CoolDown, cause StopCause) {
+func (h *handler) HandlePause(parent *Context) {
+	ctx := event.C(h.cooldown)
+	if h.parent.HandlePause(ctx, struct{}{}); ctx.Cancelled() {
+		parent.Cancel()
+	}
+}
+func (h *handler) HandleResume(parent *Context) {
+	ctx := event.C(h.cooldown)
+	if h.parent.HandleResume(ctx, struct{}{}); ctx.Cancelled() {
+		parent.Cancel()
+	}
+}
+func (h *handler) HandleStop(_ *CoolDown, cause StopCause) {
 	h.parent.HandleStop(h.cooldown, cause, zeroStruct)
 }
 
-// valuedHandler is ValuedHandler implementation that redirects actions to
-// parent Handler.
 type valuedHandler[T any] struct {
 	parent   Handler
 	cooldown *CoolDown
 }
 
-// HandleStart ...
-func (handler valuedHandler[T]) HandleStart(parent *ValuedContext[T], _ T) {
+func (handler valuedHandler[T]) HandleStart(parent *ValuedContext[T], dur time.Duration, _ T) {
 	ctx := event.C(handler.cooldown)
-	if handler.parent.HandleStart(ctx); ctx.Cancelled() {
+	if handler.parent.HandleStart(ctx, dur); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-
-// HandleRenew ...
-func (handler valuedHandler[T]) HandleRenew(parent *ValuedContext[T], _ T) {
+func (handler valuedHandler[T]) HandleRenew(parent *ValuedContext[T], dur time.Duration, _ T) {
 	ctx := event.C(handler.cooldown)
-	if handler.parent.HandleRenew(ctx); ctx.Cancelled() {
+	if handler.parent.HandleRenew(ctx, dur); ctx.Cancelled() {
 		parent.Cancel()
 	}
 }
-
-// HandleStop ...
+func (handler valuedHandler[T]) HandlePause(parent *ValuedContext[T], _ T) {
+	ctx := event.C(handler.cooldown)
+	if handler.parent.HandlePause(ctx); ctx.Cancelled() {
+		parent.Cancel()
+	}
+}
+func (handler valuedHandler[T]) HandleResume(parent *ValuedContext[T], _ T) {
+	ctx := event.C(handler.cooldown)
+	if handler.parent.HandleResume(ctx); ctx.Cancelled() {
+		parent.Cancel()
+	}
+}
 func (handler valuedHandler[T]) HandleStop(_ *Valued[T], cause StopCause, _ T) {
 	handler.parent.HandleStop(handler.cooldown, cause)
 }

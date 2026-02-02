@@ -1,220 +1,265 @@
 package cooldown
 
 import (
-	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/k4ties/cooldown/internal/event"
 )
 
-var (
-	// SafeMode is a global atomic boolean, marks if there shouldn't be any
-	// potential panics (for prod).
-	// If false, it can panic if something is very goes wrong.
-	SafeMode = func() (b atomic.Bool) {
-		b.Store(true)
-		return
-	}()
-	// Logger is global instance of slog logger. It is used to log any warns
-	// or errors.
-	// It can be changed by user.
-	Logger = func() (p atomic.Pointer[slog.Logger]) {
-		p.Store(slog.Default())
-		return
-	}()
-)
-
-// Valued represents basic cooldown with renew ability and custom values.
-//
-// Point of values is to use it in transactions and allow other users to handle
-// the context value easily. All actions of the cooldown (like stop, start,
-// renew) accepts a value. My personal opinion is to use in dragonfly
-// (github.com/df-mc/dragonfly) world transactions. If you don't want to use
-// values, there is zero implementation: CoolDown.
+// Valued represents cooldown with renew ability and values.
+// Point of values is to use them as transaction or context value.
 type Valued[T any] struct {
-	// basic is the underlying basic cooldown. It is used to control cooldown
-	// basically (Set, Reset, Remaining).
-	basic *Basic
-	// duration is pointer to current duration of the cooldown.
-	// It is used to Renew calls.
-	duration atomic.Pointer[time.Duration]
-	// handler is pointer to cooldown handler.
-	// If nil, NopHandler will be used.
+	mu sync.RWMutex // also controls basic
+
+	basic    *Basic
+	duration time.Duration
+	timer    *time.Timer
+
 	handler atomic.Pointer[ValuedHandler[T]]
-	// timer is pointer to active cooldown timer. This timer is created by
-	// time.AfterFunc and is used to stop the cooldown.
-	// If timer will expire (time.AfterFunc), it'll call stop function by
-	// itself.
-	timer atomic.Pointer[time.Timer]
 }
 
-// NewValued creates new Valued cooldown. User can omit handler argument nil.
+// NewValued creates new Valued cooldown.
 func NewValued[T any](opts ...ValuedOption[T]) *Valued[T] {
 	cd := &Valued[T]{basic: new(Basic)}
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		opt(cd)
+	}
+	if cd.handler.Load() == nil {
+		h := ValuedHandler[T](NopValuedHandler[T]{})
+		cd.handler.Store(&h)
 	}
 	return cd
 }
 
-// Renew renews the cooldown, if it is currently active.
+// Renew ...
 func (cooldown *Valued[T]) Renew(val T) {
-	if !cooldown.Active() {
-		// Not active, cannot renew
-		return
-	}
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	cooldown.RenewUnsafe(val)
+}
 
-	durationPtr := cooldown.duration.Load()
-	if durationPtr == nil {
-		// Failed to load duration
+func (cooldown *Valued[T]) RenewUnsafe(val T) {
+	if !cooldown.ActiveUnsafe() {
 		return
 	}
-	dur := *durationPtr
+	dur := cooldown.duration
 	if dur <= 0 {
 		return
 	}
-
-	ctx := createContext(cooldown)
-	if cooldown.Handler().HandleRenew(ctx, val); ctx.Cancelled() {
-		return
-	}
-
-	cooldown.basic.Set(dur)
-	timer := cooldown.timer.Load()
+	timer := cooldown.timer
 	if timer == nil {
-		if !SafeMode.Load() {
-			panic(ErrRenewTimerNil)
-		}
-		Logger.Load().Warn("an error occurred while renewing cooldown", "err", ErrRenewTimerNil)
-		// Starting new timer, that expires the cooldown
-		cooldown.timer.Store(time.AfterFunc(dur, cooldown.expire))
 		return
 	}
-
-	// Reset (renew) the timer with new duration.
+	ctx := event.C(cooldown)
+	if cooldown.Handler().HandleRenew(ctx, dur, val); ctx.Cancelled() {
+		return
+	}
+	cooldown.basic.SetUnsafe(dur)
 	timer.Reset(dur)
 }
 
-// Start starts the cooldown, if it is not currently active.
-func (cooldown *Valued[T]) Start(dur time.Duration, val T) {
-	if cooldown.Active() {
-		// Already active, cannot start again
-		return
+// Start ...
+func (cooldown *Valued[T]) Start(dur time.Duration, val T) bool {
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	return cooldown.StartUnsafe(dur, val)
+}
+
+func (cooldown *Valued[T]) StartUnsafe(dur time.Duration, val T) bool {
+	if dur <= 0 {
+		return false
 	}
-
-	ctx := createContext(cooldown)
-	if cooldown.Handler().HandleStart(ctx, val); ctx.Cancelled() {
-		return
+	if cooldown.ActiveUnsafe() {
+		cooldown.StopUnsafe(val)
 	}
-
-	cooldown.duration.Store(&dur)
-	cooldown.basic.Set(dur)
-
-	if t := cooldown.timer.Load(); t != nil {
-		if !SafeMode.Load() {
-			panic(ErrStartTimerNotNil)
-		}
-		// Log the error on safe mode
-		Logger.Load().Warn("an error occurred while starting cooldown", "err", ErrStartTimerNotNil)
-		// And clear actual timer
-		t.Stop()
-		cooldown.timer.Store(nil)
+	ctx := event.C(cooldown)
+	if cooldown.Handler().HandleStart(ctx, dur, val); ctx.Cancelled() {
+		return false
 	}
-
-	// Starting timer, that expires the cooldown
-	cooldown.timer.Store(time.AfterFunc(dur, cooldown.expire))
+	cooldown.duration = dur
+	cooldown.timer = time.AfterFunc(dur, cooldown.expire)
+	cooldown.basic.SetUnsafe(dur)
+	return true
 }
 
 func (cooldown *Valued[T]) expire() {
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+
 	var zeroT T
 	cooldown.Handler().HandleStop(cooldown, ErrStopCauseExpired, zeroT)
-	cooldown.stop()
+	cooldown.doStopUnsafe(zeroT)
 }
 
-// Stop stops the cooldown, if it is currently active.
+// Stop ...
 func (cooldown *Valued[T]) Stop(val T) {
-	if !cooldown.Active() {
-		// Not active, cannot stop
-		return
-	}
-
-	cause := ErrStopCauseCancelled
-	cooldown.Handler().HandleStop(cooldown, cause, val)
-	cooldown.stop()
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	cooldown.StopUnsafe(val)
 }
 
-func (cooldown *Valued[T]) stop() {
-	cooldown.duration.Store(nil)
-	cooldown.basic.Reset()
+func (cooldown *Valued[T]) StopUnsafe(val T) {
+	if !cooldown.ActiveUnsafe() {
+		return
+	}
+	cooldown.Handler().HandleStop(cooldown, ErrStopCauseCancelled, val)
+	cooldown.doStopUnsafe(val)
+}
 
-	timer := cooldown.timer.Load()
+func (cooldown *Valued[T]) doStopUnsafe(val T) {
+	if cooldown.PausedUnsafe() {
+		cooldown.doResumeUnsafe(val, false) // we will stop the timer
+	}
+	cooldown.duration = 0
+	cooldown.basic.ResetUnsafe()
+
+	if timer := cooldown.timer; timer != nil {
+		timer.Stop()
+		cooldown.timer = nil
+	}
+}
+
+// Pause ...
+func (cooldown *Valued[T]) Pause(val T) bool {
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	return cooldown.PauseUnsafe(val)
+}
+
+func (cooldown *Valued[T]) PauseUnsafe(val T) bool {
+	if cooldown.PausedUnsafe() || !cooldown.ActiveUnsafe() {
+		return false
+	}
+	timer := cooldown.timer
 	if timer == nil {
-		if !SafeMode.Load() {
-			panic(ErrStopTimerNil)
-		}
-		Logger.Load().Warn("an error occurred while stopping cooldown", "err", ErrStopTimerNil)
-		return
+		return false
 	}
-
-	// Stop the timer to prevent cooldown expiration
-	timer.Stop()
-	// Invalidate the timer
-	cooldown.timer.Store(nil)
+	ctx := event.C(cooldown)
+	if cooldown.Handler().HandlePause(ctx, val); ctx.Cancelled() {
+		return false
+	}
+	if !cooldown.basic.PauseUnsafe() {
+		return false
+	}
+	ok := timer.Stop()
+	cooldown.timer = nil // Resume will create new timer
+	return ok
 }
 
-// Handler returns current cooldown handler. If it is not set, NopHandler will
-// be returned.
+// Resume ...
+func (cooldown *Valued[T]) Resume(val T) bool {
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	return cooldown.ResumeUnsafe(val)
+}
+
+func (cooldown *Valued[T]) ResumeUnsafe(val T) bool {
+	return cooldown.doResumeUnsafe(val, true)
+}
+
+func (cooldown *Valued[T]) doResumeUnsafe(val T, resetTimer bool) bool {
+	if !cooldown.PausedUnsafe() {
+		return false
+	}
+	dur := cooldown.duration
+	if dur <= 0 {
+		return false
+	}
+	ctx := event.C(cooldown)
+	if cooldown.Handler().HandleResume(ctx, val); ctx.Cancelled() {
+		return false
+	}
+	if !cooldown.basic.ResumeUnsafe() {
+		return false
+	}
+	if resetTimer {
+		// RemainingUnsafe also accounts for paused state
+		cooldown.timer = time.AfterFunc(cooldown.RemainingUnsafe(), cooldown.expire)
+	}
+	return true
+}
+
+// TogglePause ...
+func (cooldown *Valued[T]) TogglePause(val T) bool {
+	cooldown.mu.Lock()
+	defer cooldown.mu.Unlock()
+	return cooldown.TogglePauseUnsafe(val)
+}
+
+func (cooldown *Valued[T]) TogglePauseUnsafe(val T) bool {
+	if cooldown.PausedUnsafe() {
+		return cooldown.ResumeUnsafe(val)
+	}
+	return cooldown.PauseUnsafe(val)
+}
+
+// Handler ...
 func (cooldown *Valued[T]) Handler() ValuedHandler[T] {
-	handlerPtr := cooldown.handler.Load()
-	if handlerPtr == nil {
-		// Nil pointer (no handler set)
-		return NopValuedHandler[T]{}
-	}
-	handlerVal := *handlerPtr
-	if handlerVal == nil {
-		// Nil handler, but not nil pointer ???
-		cooldown.handler.Store(nil) // Store nil pointer to optimize (get nop handler instantly)
-		return NopValuedHandler[T]{}
-	}
-	return handlerVal
+	// if properly initialized this is never nil
+	return *cooldown.handler.Load()
 }
 
-// Handle updates current cooldown handler. If user entered nil as argument,
-// current handler will be removed.
+// Handle ...
 func (cooldown *Valued[T]) Handle(handler ValuedHandler[T]) {
-	// Making sure handler is never nil
 	if handler == nil {
-		// If it is nil, just updating it to no-operation handler
 		handler = NopValuedHandler[T]{}
 	}
 	cooldown.handler.Store(&handler)
 }
 
-// Duration returns duration of the cooldown.
-func (cooldown *Valued[T]) Duration() (dur time.Duration) {
-	if v := cooldown.duration.Load(); v != nil {
-		// Can safely dereference v, even if duration is not set, it is not
-		// pointer, so it'll automatically be 0
-		val := *v
-		dur = val
-	}
-	return
+// Duration ...
+func (cooldown *Valued[T]) Duration() time.Duration {
+	cooldown.mu.RLock()
+	defer cooldown.mu.RUnlock()
+	return cooldown.DurationUnsafe()
 }
 
-// Active returns true if cooldown is currently active.
+func (cooldown *Valued[T]) DurationUnsafe() time.Duration {
+	return cooldown.duration
+}
+
+// Active ...
 func (cooldown *Valued[T]) Active() bool {
-	return cooldown.basic.Active()
+	cooldown.mu.RLock()
+	defer cooldown.mu.RUnlock()
+	return cooldown.ActiveUnsafe()
 }
 
-// Remaining returns the duration until cooldown expiration.
-// If cooldown is not active, it returns number that either zero or negative.
+func (cooldown *Valued[T]) ActiveUnsafe() bool {
+	return cooldown.basic.ActiveUnsafe()
+}
+
+// Remaining ...
 func (cooldown *Valued[T]) Remaining() time.Duration {
-	return cooldown.basic.Remaining()
+	cooldown.mu.RLock()
+	defer cooldown.mu.RUnlock()
+	return cooldown.RemainingUnsafe()
 }
 
-// Basic returns underlying basic cooldown of this valued cooldown.
-// WARNING: It should be only used for testing purposes.
-func (cooldown *Valued[T]) Basic() *Basic {
-	return cooldown.basic
+func (cooldown *Valued[T]) RemainingUnsafe() time.Duration {
+	return cooldown.basic.RemainingUnsafe()
 }
 
-// TODO context support
+// Paused ...
+func (cooldown *Valued[T]) Paused() bool {
+	cooldown.mu.RLock()
+	defer cooldown.mu.RUnlock()
+	return cooldown.PausedUnsafe()
+}
+
+func (cooldown *Valued[T]) PausedUnsafe() bool {
+	return cooldown.basic.PausedUnsafe()
+}
+
+func (cooldown *Valued[T]) L() *sync.RWMutex {
+	return &cooldown.mu
+}
+
+// TODO context.Context support ? context.AfterFunc
+
+// TODO return errors , maybe create something like 'MustPause()' methods with logger

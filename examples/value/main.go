@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/k4ties/cooldown"
 	"log"
 	"time"
+
+	"github.com/k4ties/cooldown"
 )
 
 func main() {
@@ -33,14 +34,16 @@ func lf(f string, a ...any) {
 	log.Printf(f, a...)
 }
 
-type handler struct{}
-
-func (handler) HandleStart(_ *cooldown.ValuedContext[string], val string) {
-	lf("handle start [val='%v']", val)
+type handler struct {
+	cooldown.NopValuedHandler[string]
 }
 
-func (handler) HandleRenew(_ *cooldown.ValuedContext[string], val string) {
-	lf("handle renew [val='%v']", val)
+func (handler) HandleStart(_ *cooldown.ValuedContext[string], dur time.Duration, val string) {
+	lf("handle start [val='%v',dur='%s']", val, dur)
+}
+
+func (handler) HandleRenew(_ *cooldown.ValuedContext[string], dur time.Duration, val string) {
+	lf("handle renew [val='%v',dur='%s']", val, dur)
 }
 
 func (handler) HandleStop(_ *cooldown.Valued[string], cause cooldown.StopCause, val string) {
